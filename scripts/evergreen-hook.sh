@@ -10,18 +10,18 @@
 # Windows (Git Bash): ${CLAUDE_PLUGIN_ROOT} may arrive with backslashes, and `python3` is often the Store stub.
 self=$(printf '%s' "$0" | tr '\\' '/')
 DIR="$(cd "$(dirname "$self")" && pwd)"
+# A candidate counts only if it can actually run Python: the Windows Store stub and the macOS Command Line
+# Tools stub both exist on PATH and fail (or pop a dialog) instead of running a script.
 PY=""
 case "$(uname -s 2>/dev/null)" in
-  MINGW*|MSYS*|CYGWIN*)
-    if command -v py >/dev/null 2>&1; then PY="py -3"
-    elif command -v python >/dev/null 2>&1; then PY=python
-    elif command -v python3 >/dev/null 2>&1; then PY=python3
-    fi ;;
-  *)
-    if command -v python3 >/dev/null 2>&1; then PY=python3
-    elif command -v python >/dev/null 2>&1; then PY=python
-    fi ;;
+  MINGW*|MSYS*|CYGWIN*) CANDS="py -3|python|python3" ;;
+  *)                    CANDS="python3|python" ;;
 esac
+old_ifs=$IFS; IFS='|'
+for c in $CANDS; do
+  if $c -c "import sys" >/dev/null 2>&1; then PY=$c; break; fi
+done
+IFS=$old_ifs
 [ -z "$PY" ] && exit 0
 if [ "$1" = "end" ]; then
   $PY "$DIR/evergreen.py" notify --if-changed --from-hook --detach >/dev/null 2>&1

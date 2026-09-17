@@ -7,7 +7,7 @@ description: "Show what the evergreen plugin changed about itself since it was i
 
 One bundle: `UPDATE.md` (digest), `changes.patch` (git-style unified diff, blob ids included so a git trunk can 3-way merge it), `manifest.json` (hashes, baseline, state). Protocol: `<plugin root>/protocol/PROTOCOL.md` §10.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path. The sync commands live in `scripts/evergreen_sync.py`, stdlib only.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)). The sync commands live in `scripts/evergreen_sync.py`, stdlib only.
 
 ## Step 0: freshness of this plugin (every use, one read)
 

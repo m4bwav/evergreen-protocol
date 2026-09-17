@@ -1,0 +1,36 @@
+# Runs the plugin's own suite on the three operating systems the protocol promises (PROTOCOL.md section 8),
+# plus a smoke run of the sh hook, so a change that only works on the author's machine cannot land unnoticed.
+name: tests
+on:
+  push:
+    branches: [master]
+  pull_request:
+jobs:
+  suite:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: unit and integration suite
+        env:
+          EVERGREEN_HOME: ${{ runner.temp }}/evergreen-home
+        run: python scripts/test_evergreen.py
+      - name: lint and links
+        run: |
+          python scripts/evergreen.py lint .
+          python scripts/evergreen.py links .
+      - name: sh hook smoke run (SessionStart audit must exit 0 and print nothing fatal)
+        shell: bash
+        env:
+          EVERGREEN_HOME: ${{ runner.temp }}/evergreen-home
+          CLAUDE_PLUGIN_ROOT: ${{ github.workspace }}
+        run: |
+          sh scripts/evergreen-hook.sh
+          echo '{"tool_name":"Skill","tool_input":{"skill":"evergreen-audit"}}' | sh scripts/evergreen-hook.sh use

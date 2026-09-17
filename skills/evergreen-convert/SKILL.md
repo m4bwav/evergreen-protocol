@@ -7,7 +7,7 @@ description: "Convert an existing skill, plugin, knowledge document, or repo doc
 
 Bring an existing unit into the protocol without rewriting it. Protocol: `<plugin root>/protocol/PROTOCOL.md`; tiers: `protocol/INTERVALS.md`; modes: `protocol/PORTABILITY.md`.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 
@@ -37,6 +37,8 @@ EG init <unit-dir> --name <name> --topic "<topic>" --kind skill --tier <tier> --
 `init` never overwrites existing files: it writes the missing companions from templates (for skills also `TESTS.md` and `evals/evals.json`), appends the Step 0 / learnings / Maintenance sections to the main file, sets the schedule, and registers the unit. A unit converted before the testing pillar existed gets the suite with `EG test-init <unit>`. `--last-checked` matters: set it to when the content was actually researched, so a stale-on-arrival unit is caught by the next audit instead of being trusted for a full interval.
 
 No shell reaching the folder? Copy the templates from `<plugin root>/templates/` by hand and fill the `{{PLACEHOLDERS}}` (`DATEID` is the date without dashes); write `evergreen.json` using the plugin's own as a model.
+
+While converting, note anything platform-bound in the skill's scripts or instructions (backslash paths, `%USERPROFILE%`, PowerShell-only steps, CRLF in a `.sh`) and either fix it or record it as a learning; the protocol prefers cross-platform compatibility wherever it is not onerous (PROTOCOL.md §8).
 
 ## Step 3: fill, do not stub
 

@@ -32,6 +32,20 @@ A configured store on a drive the machine does not have (the shipped config name
 
 Sandboxed agents (Cowork's Linux sandbox, cloud runners) may not see the host path. Then either run the script on the host through a host-side tool (Desktop Commander `start_process` in Cowork), or follow the protocol by hand with whatever file tool reaches the path. The environment profile records which applies where.
 
+## Cross-platform by default
+
+PROTOCOL.md §8 makes portability the default for anything that follows the protocol, wherever it is not onerous. The checklist a scaffold or conversion applies:
+
+| Concern | Do | Not |
+|---|---|---|
+| Interpreter | `python` first, `python3` when that is missing (the plugin's own hook does this); Python 3.9+, stdlib only | a pinned launcher (`py -3`, `/usr/bin/python3`), third-party packages |
+| Paths | `pathlib`, `os.path.join`, `Path.home()`, `os.environ`; a per-OS map `{"nt": ..., "posix": ...}` when the location differs | backslash literals, `%USERPROFILE%`, `/Users/<name>`, drive letters in shared config |
+| Files | `encoding="utf-8"` on every open; LF endings in every committed text file; `newline=""` when writing CSV | platform-default encodings (cp1252), CRLF in `.sh`, `.py`, `.json`, `.md` |
+| Processes | `subprocess.run([...])` with an argv list; `shutil.which` to find a tool; `creationflags` guarded by `os.name == "nt"`, `start_new_session=True` on POSIX | `shell=True` with Windows or bash syntax, `os.startfile`, `taskkill`, `open`, `xdg-open` without a branch |
+| Hooks and shell | POSIX `sh` scripts (Claude Code on Windows ships Git Bash); a `.ps1` twin only as an alternative wiring, never the only one | bash-only syntax in a script run by `sh`, PowerShell as the sole hook |
+| Platform-only features | allowed when the general route would be onerous (COM, Graph, CUDA, Metal); the skill names the platforms it covers and prints a one-line message elsewhere | a crash or a silent no-op on the other systems |
+| Proof | at least one run on a second operating system when one is reachable (LAN Mac, Linux sandbox, CI); `untested elsewhere` in TESTS.md when none is | assuming the development machine is representative |
+
 ## Four linking modes
 
 A unit needs to find the protocol. Pick the mode when creating or converting, record it as `protocol` in `evergreen.json`.

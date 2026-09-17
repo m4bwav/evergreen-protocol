@@ -1,6 +1,8 @@
 # No line-ending conversion anywhere: pack manifests, baselines and `git apply --3way` all hash the bytes on disk,
 # and Git for Windows' autocrlf default would make the worktree differ from the blobs.
 * -text
+# Shell hooks must be LF on every platform (sh on Mac and Linux rejects CRLF); the whole tree is kept LF.
+*.sh text eol=lf
 
 # The logs are append-only entry lists (PROTOCOL.md section 2): when two clones add entries to the same spot, keep both.
 # Git's built-in union driver does that with no tooling; `evergreen.py lint` then reports any duplicate ID to renumber.

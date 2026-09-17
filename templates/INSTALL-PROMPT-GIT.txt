@@ -2,9 +2,9 @@ Install or update the Evergreen plugin from its git repository:
 
     {repo_url}
 
-Do every step yourself, without asking me anything unless a step fails. Finish with a report of a few lines.
+Do every step yourself, without asking me anything unless a step fails. Where a step says `python`, use `python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way). Finish with a report of a few lines.
 
-1. Pick ROOT, the folder that will hold the plugin clone. If `claude plugin list` already shows `evergreen@{marketplace}`, ROOT is the folder recorded for the `{marketplace}` marketplace in `~/.claude/plugins/known_marketplaces.json`. Otherwise ROOT is `~/claude-plugins` (Windows: `%USERPROFILE%\claude-plugins`); create it.
+1. Pick ROOT, the folder that will hold the plugin clone. If `claude plugin list` already shows `evergreen@{marketplace}`, ROOT is the folder recorded for the `{marketplace}` marketplace in `~/.claude/plugins/known_marketplaces.json`. Otherwise ROOT is `$HOME/claude-plugins` (the same folder in Git Bash on Windows, macOS and Linux); create it.
 2. If `ROOT/evergreen` is already a git clone of that repository: `cd ROOT/evergreen && python scripts/evergreen.py pull` (a clean fast-forward; if it reports uncommitted changes, run `python scripts/evergreen.py publish` first and then pull). If `ROOT/evergreen` exists but is not a clone (an old archive install), rename it to `ROOT/evergreen.bak-<today's date>` and continue. If it does not exist: `git clone {repo_url} ROOT/evergreen`. Cloning needs read access to the repository (`gh auth login` once if it is private).
 3. Make sure `ROOT/.claude-plugin/marketplace.json` exists with this content (create it, or add the plugin entry if the file is already there):
    {"name": "{marketplace}", "owner": {"name": "{owner}"}, "plugins": [{"name": "evergreen", "source": "./evergreen", "description": "Self-maintaining skills and knowledge"}]}

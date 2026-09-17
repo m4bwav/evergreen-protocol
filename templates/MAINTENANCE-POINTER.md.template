@@ -4,7 +4,7 @@ This unit is evergreen. It follows the Evergreen Protocol that lives in the one 
 
 ## Finding the plugin
 
-In order: the `EVERGREEN_PLUGIN` environment variable; `registry.json` in the evergreen store (`EVERGREEN_HOME`, default `~/.evergreen`) → `plugin_root`; a folder named `evergreen` beside this skill's plugin or under the agent's plugin roots; `python <plugin>/scripts/evergreen.py where` prints the resolved paths once found. Then read `<plugin>/protocol/PROTOCOL.md` and use its skills (`evergreen-refresh`, `evergreen-learn`, `evergreen-test`, `evergreen-tune`). The environment profile in the plugin (`profile/ENVIRONMENTS.md`) records where it lives on each machine.
+In order: the `EVERGREEN_PLUGIN` environment variable; `registry.json` in the evergreen store (`EVERGREEN_HOME`, default `~/.evergreen`) → `plugin_root`; a folder named `evergreen` beside this skill's plugin or under the agent's plugin roots; `python (or python3) <plugin>/scripts/evergreen.py where` prints the resolved paths once found. Then read `<plugin>/protocol/PROTOCOL.md` and use its skills (`evergreen-refresh`, `evergreen-learn`, `evergreen-test`, `evergreen-tune`). The environment profile in the plugin (`profile/ENVIRONMENTS.md`) records where it lives on each machine.
 
 ## Step 0: freshness (every use, one read)
 

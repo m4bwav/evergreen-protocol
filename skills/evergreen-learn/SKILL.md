@@ -7,7 +7,7 @@ description: "Capture a lesson so no one has to teach the agent the same thing t
 
 Turn a signal into a durable, deletable, well-reasoned rule in the right place. Format and gate: `<plugin root>/protocol/LEARNINGS-FORMAT.md`. Routing: `protocol/PROTOCOL.md` §5.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path; optional, everything here can be done by hand.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)); optional, everything here can be done by hand.
 
 ## Step 0: freshness of this plugin (every use, one read)
 

@@ -7,7 +7,7 @@ description: "Fix a skill or plugin that failed a test or failed in use: it did 
 
 The bounded loop that turns a failure into a fix with a reason. Rules: `<plugin root>/protocol/TESTING.md` §5; research gate in `protocol/INTERVALS.md`. Three iterations per session, then stop and report.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 

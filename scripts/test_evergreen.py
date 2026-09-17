@@ -643,6 +643,15 @@ class Scaffold(unittest.TestCase):
         (d / "SKILL.md").write_text('---\nname: fm\ndescription: "builds a versioned zip"\n---\n# fm <ok in body>\n', encoding="utf-8")
         self.assertEqual(eg.frontmatter_problems(d / "SKILL.md"), [])
 
+    def test_sh_hook_is_lf_everywhere(self):
+        root = eg.plugin_root()
+        hook = root / "scripts" / "evergreen-hook.sh"
+        self.assertNotIn(b"\r", hook.read_bytes(), "a CRLF shell script does not run on Mac or Linux")
+        self.assertNotIn(b"\r", eg.shipped_bytes(hook, Path("scripts/evergreen-hook.sh")))
+        d = Path(self.tmp.name) / "exp"
+        eg.export(d)
+        self.assertNotIn(b"\r", (d / ".agents" / "scripts" / "evergreen-hook.sh").read_bytes())
+
     def test_plugin_own_unit_is_clean(self):
         root = eg.plugin_root()
         _, st = eg.load_state(root)
@@ -999,7 +1008,7 @@ class GitTransport(unittest.TestCase):
 
     @staticmethod
     def _g(cwd, *args):
-        r = subprocess.run(["git"] + list(args), cwd=str(cwd), capture_output=True, text=True)
+        r = subprocess.run(["git"] + list(args), cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace")
         return r.stdout.strip()
 
     def _edit(self):

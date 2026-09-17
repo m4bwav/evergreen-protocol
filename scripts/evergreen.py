@@ -598,7 +598,7 @@ def discover(roots: list[Path], max_depth: int = 4) -> list[Path]:
 
 def git(args: list[str], cwd: Path) -> str | None:
     try:
-        r = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True, text=True, timeout=20)
+        r = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20)
         if r.returncode != 0:
             return None
         return r.stdout.strip()
@@ -924,6 +924,8 @@ def shipped_bytes(p: Path, rel: Path, share: bool = False) -> bytes:
     """What actually goes into the archive for this file. Identical to the file on disk, except that a share
     archive ships a config with the owner's address and store removed."""
     data = p.read_bytes()
+    if rel.suffix == ".sh" and b"\r\n" in data:  # a CRLF shell script does not run on Mac or Linux
+        data = data.replace(b"\r\n", b"\n")
     if share and rel.as_posix() == "evergreen.config.json":
         return share_config(data.decode("utf-8", errors="replace")).encode("utf-8")
     return data
@@ -941,7 +943,7 @@ def pack_manifest(files: list, share: bool = False) -> dict:
 
 INSTALL_PROMPT_FALLBACK = (
     "Install the Evergreen plugin {version} from the archive saved in this folder: <<< PASTE THE FOLDER PATH HERE >>>\n"
-    "Unzip it, run `python evergreen/scripts/evergreen.py unmail evergreen`, put the `evergreen/` folder under a ROOT folder that has\n"
+    "Unzip it, run `python evergreen/scripts/evergreen.py unmail evergreen` (`python3` on macOS and Linux), put the `evergreen/` folder under a ROOT folder that has\n"
     ".claude-plugin/marketplace.json ({\"name\": \"mark-local\", \"plugins\": [{\"name\": \"evergreen\", \"source\": \"./evergreen\"}]}),\n"
     "then `claude plugin marketplace add ROOT` and `claude plugin install evergreen@mark-local --scope user`, and confirm with `claude plugin list`.\n"
 )
@@ -1110,6 +1112,11 @@ def export(repo: Path) -> Path:
     for p, rel in iter_plugin_files():
         if rel.parts and rel.parts[0] in ("hooks", ".claude-plugin"):
             continue
+        if rel.suffix == ".sh":
+            t = dest / rel
+            t.parent.mkdir(parents=True, exist_ok=True)
+            t.write_bytes(shipped_bytes(p, rel))
+            continue
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(p, target)
@@ -1138,7 +1145,7 @@ def cmd_status(a):
 
 def cmd_audit(a):
     roots = [Path(r) for r in a.roots] if a.roots else default_roots()
-    units = discover(roots)
+    units = discover(roots, max_depth=2) if (getattr(a, "brief", False) and not a.roots) else discover(roots)  # hook: shallow walk, 15 s budget
     rows, stale, problems, failing = [], 0, 0, 0
     for d in sorted(units, key=lambda p: str(p).lower()):
         try:
@@ -1341,7 +1348,7 @@ def cmd_use_log(a):
     """PostToolUse hook body: one JSON line per Skill invocation. Silent and exception-free by design, since some hook
     events feed stdout back into the model's context."""
     try:
-        raw = Path(a.file).expanduser().read_text(encoding="utf-8") if a.file else sys.stdin.read()
+        raw = Path(a.file).expanduser().read_text(encoding="utf-8") if a.file else sys.stdin.buffer.read().decode("utf-8", "replace")
         payload = json.loads(raw or "{}")
         if not isinstance(payload, dict) or str(payload.get("tool_name") or "") != "Skill":
             return
@@ -1538,6 +1545,11 @@ def cmd_unmail(a):
 
 
 def main(argv=None):
+    for s in (sys.stdout, sys.stderr):  # Windows consoles default to a code page; unit names and paths are UTF-8
+        try:
+            s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     p = argparse.ArgumentParser(prog="evergreen.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--strict", action="store_true", help="exit non-zero on problems or stale units")

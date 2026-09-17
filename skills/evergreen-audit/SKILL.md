@@ -7,7 +7,7 @@ description: "List every evergreen unit (skills, docs, codemaps, profiles) with 
 
 One table, then action. Protocol: `<plugin root>/protocol/PROTOCOL.md` §7.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 

@@ -42,6 +42,8 @@ This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the eviden
 
 ## Install
 
+Prerequisites: git, Python 3.9+ (`python` on Windows, `python3` on macOS and Linux; on macOS that means the Xcode Command Line Tools or a python.org install), and `gh` for pull requests. Nothing else: the scripts are stdlib only and the hooks are POSIX `sh`, which Claude Code on Windows runs through Git Bash.
+
 **From the repository (the normal way).** Open Claude Code and paste `templates/INSTALL-PROMPT-GIT.txt` (the repository URL is already in it). The agent clones the repository under a local marketplace root (`~/claude-plugins` unless one already exists), or pulls if the clone is there, registers the marketplace, installs or reinstalls with `claude plugin`, verifies with `claude plugin list`, and runs `where` and the first audit. Updating later is `python <clone>/scripts/evergreen.py pull` followed by a reinstall when it says skills or scripts changed. The repository is public (https://github.com/m4bwav/evergreen-protocol); cloning needs no account, and `gh auth login` once lets the clone open pull requests with its improvements.
 
 **From an update email or a packed archive (fallback).** Save the attachments to one folder and paste the archive form of the prompt (`INSTALL-PROMPT.txt`, inside every archive and at the top of every update email), replacing its one placeholder with that folder's path. An archive install is not a git clone, so it reports by email until it is replaced by a clone.

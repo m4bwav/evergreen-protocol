@@ -7,7 +7,7 @@ description: "Build or update the plugin's own codemap of a repository or system
 
 Keep a short, honest map of every system you explore. Format and rules: `<plugin root>/protocol/CODEMAP-FORMAT.md`. Maps are compasses, not encyclopedias (auto-generated bloat measurably hurts agents); every claim carries a marker (✓ verified, ~ inferred, ? unverified) and the map logs which questions it has actually answered.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path; optional.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)); optional.
 
 ## Step 0: freshness of this plugin (every use, one read)
 

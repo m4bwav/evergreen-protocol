@@ -7,7 +7,7 @@ description: "Publish the evergreen plugin's self-changes (refreshes, learnings,
 
 The plugin reports its own changes to one git repository (the trunk). The script does it unattended after `checked`, `bump`, `tested` and at Claude Code session end; this skill is what an agent does when asked, when the script could not push, or when a clone needs updating. Protocol: `<plugin root>/protocol/PROTOCOL.md` §10; which route suits which machine: `protocol/PORTABILITY.md` §Self-updates.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path. The plugin root must be a git clone of the trunk; an installed cache copy is read-only, so run `EG` from the clone (`EG where` prints which one you are in).
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)). The plugin root must be a git clone of the trunk; an installed cache copy is read-only, so run `EG` from the clone (`EG where` prints which one you are in).
 
 ## Step 0: freshness of this plugin (every use, one read)
 

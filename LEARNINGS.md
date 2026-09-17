@@ -6,6 +6,15 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-020 · 2026-09-17 · A shell hook committed from Windows can carry CRLF endings, and `* -text` in .gitattributes ships them everywhere
+- Trigger: the privacy scrub of the tree for the public repository showed `scripts/evergreen-hook.sh` (and 40 other files) with CRLF endings; under `sh` on macOS or Linux a CRLF script fails at the first `case` line, so all three Claude Code hooks would have died silently on every non-Windows install, and nothing in the paradigm would have noticed because the development machine's Git Bash strips the ``
+- Hypothesis: editors and tools on Windows write CRLF by default; `* -text` (needed so pack manifests and patches hash the bytes on disk) also means git never normalises, so whatever a Windows editor wrote is what every clone gets
+- Rule: keep every committed text file LF (`*.sh text eol=lf` on top of `* -text`, the whole tree normalised once), let `shipped_bytes` and `export` normalise `.sh` regardless, keep the test that asserts the hook has no ``, and let CI on a second operating system be the proof (C-20260917-2); an agent writing files on Windows passes `newline="
+"` or writes bytes
+- Evidence: C-20260917-2; the portability audit of 2026-09-17; test_sh_hook_is_lf_everywhere
+- Scope: global
+- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-17
+
 ### L-019 · 2026-09-13 · On Windows `claude plugin eval` refuses any case that grants a shell tool, and repeated `--case` flags keep only the last one
 - Trigger: the first full run of the plugin's suite (T-20260913-1): all 60 runs errored with "A shell tool (Bash or PowerShell) was granted but this machine cannot confine it (no sandbox backend on this platform)", even though `--allow-tools Bash` was passed; the rerun with `--case "trigger-*" --case "decoy-*" --case "outcome-*"` executed only outcome-1.
 - Hypothesis: the harness sandboxes shell tools through a backend that exists only on Linux and macOS, and on Windows it fails closed rather than running unconfined; `--case` is a single-value option, so the last flag wins.

@@ -7,7 +7,7 @@ description: "Write and run the eval suite that proves a skill or plugin works: 
 
 Prove a unit with evidence, log the run, and hand failures to the tuning loop. Rules: `<plugin root>/protocol/TESTING.md` (the shape is in PROTOCOL.md §11). The failure this exists for is the skill that says it delegated and never did.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 
@@ -34,6 +34,7 @@ Keep prompts short and realistic. Do not tell the case which skill to use; a tri
 
 Pick the harness from TESTING.md §6, first that exists: `claude plugin eval` (Claude Code, early access; `--case`, `--runs 3`, graders `tool_used` on `Skill`, `file_exists`, `regex`), skill-creator's runner (its `evals/evals.json` is ours), otherwise the `evergreen-tester` agent, one case per call, or a headless CLI (`claude -p ... --output-format stream-json`, `copilot -p`, `codex exec`) with the `tool_use` events captured. In Cowork the tester agent is the harness; prefer action evidence the main session can check on disk.
 
+0. Second platform: when the skill has a script and another operating system is reachable (a LAN machine over ssh, a Linux sandbox, CI), run its action case there once and record the result; otherwise write `untested elsewhere` in the TESTS.md entry (PROTOCOL.md §8).
 1. Baseline once per action and outcome case: the same prompt in a fresh context with the skill absent (tell the tester not to load it; or run before the skill is installed). Record what happened in the case's `baseline` field, one line. A case that passes without the skill is redundant: sharpen it or mark it.
 2. Run every case `runs` times (default 3) in fresh contexts. Collect the evidence the case names; for trigger cases, the Skill tool call in the trace or the tester's report of the skills it invoked.
 3. Judge per TESTING.md §7: trigger 2 of 3, decoy 0 of 3, action and outcome every run with evidence. Never grade an action case on the reply's wording.

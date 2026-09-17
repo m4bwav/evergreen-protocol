@@ -7,7 +7,7 @@ description: "Land what other evergreen clones published into the trunk reposito
 
 The trunk is the git repository named in `evergreen.config.json` (`git.upstream`, branch `master`). Other clones publish their self-updates there (`evergreen-publish`): a maintainer's clone pushes `master` directly and nothing needs landing; a contributor's clone opens a pull request, and this skill reviews and merges it. The email bundle route (§Email bundles) is the fallback for machines with no access to the host. Protocol: `<plugin root>/protocol/PROTOCOL.md` §10.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Pull requests (the git route)
 

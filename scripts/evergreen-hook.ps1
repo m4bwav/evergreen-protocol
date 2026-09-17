@@ -14,8 +14,11 @@ param([switch]$End, [switch]$Use)
 try {
   $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
   $py = $null
-  foreach ($c in @("python", "python3", "py")) {
-    if (Get-Command $c -ErrorAction SilentlyContinue) { $py = $c; break }
+  foreach ($c in @("py", "python", "python3")) {  # probe: the Store stub is on PATH but cannot run a script
+    if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { continue }
+    $probe = if ($c -eq "py") { @("-3", "-c", "import sys") } else { @("-c", "import sys") }
+    & $c @probe 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $py = $c; break }
   }
   if (-not $py) { exit 0 }
   $pyArgs = @()

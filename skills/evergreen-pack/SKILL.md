@@ -5,7 +5,7 @@ description: "Package the evergreen plugin into a single archive to email, back 
 
 # Evergreen pack
 
-Since protocol 1.4 the normal install is a git clone of the trunk repository (README §Install, `templates/INSTALL-PROMPT-GIT.txt`) and updates travel by `publish` and `pull`; an archive is for Cowork's `.plugin`, a backup, a copy for someone without repository access, or the email fallback. One archive, no dependencies. Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Since protocol 1.4 the normal install is a git clone of the trunk repository (README §Install, `templates/INSTALL-PROMPT-GIT.txt`) and updates travel by `publish` and `pull`; an archive is for Cowork's `.plugin`, a backup, a copy for someone without repository access, or the email fallback. One archive, no dependencies. Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 

@@ -430,7 +430,7 @@ def build_update_md(changes: list[dict], base_meta: dict | None, bundle_id: str,
         stat = f" (+{c['plus']} -{c['minus']})" if "plus" in c else ""
         lines.append(f"- {mark} {c['path']}{stat}")
     lines += ["", "## How to merge at the trunk", "",
-              "`python <trunk>/scripts/evergreen.py merge <this bundle folder, its changes.patch, or this email saved as .txt>` "
+              "`python <trunk>/scripts/evergreen.py merge` (`python3` on macOS and Linux) ` <this bundle folder, its changes.patch, or this email saved as .txt>` "
               "then `pack` and reinstall elsewhere. The patch is attached and, when small, inline below between the BEGIN/END markers.", ""]
     return "\n".join(lines)
 
@@ -1398,7 +1398,7 @@ def merge(source: Path, trunk: Path | None = None, dry_run: bool = False, use_gi
                 with tempfile.NamedTemporaryFile("w", suffix=".patch", delete=False, encoding="utf-8", newline="\n") as f:
                     f.write(single)
                     sp = f.name
-                r = subprocess.run(["git", "apply", "--3way", sp], cwd=str(trunk), capture_output=True, text=True)
+                r = subprocess.run(["git", "apply", "--3way", sp], cwd=str(trunk), capture_output=True, text=True, encoding="utf-8", errors="replace")
                 os.unlink(sp)
                 if r.returncode == 0:
                     txt = p.read_text(encoding="utf-8", errors="replace")
@@ -1597,7 +1597,7 @@ def git_config() -> dict:
 def git_run(args: list[str], cwd: Path, timeout: int = 90) -> tuple[int, str]:
     """git with its stderr kept: publish needs to read rejection reasons (auth, non-fast-forward, conflicts)."""
     try:
-        r = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True, text=True, timeout=timeout,
+        r = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
         return r.returncode, (r.stdout + r.stderr).strip()
     except Exception as e:
@@ -1680,7 +1680,7 @@ def load_publish_state() -> dict:
 
 
 def changed_paths(root: Path) -> list[str]:
-    out = eg.git(["status", "--porcelain", "--untracked-files=all"], root) or ""
+    out = eg.git(["-c", "core.quotepath=off", "status", "--porcelain", "--untracked-files=all"], root) or ""
     paths = []
     for ln in out.splitlines():
         if len(ln) > 3:
@@ -1699,7 +1699,7 @@ def open_pull_request(root: Path, cfg: dict, branch: str, title: str, body: str)
     if cfg.get("upstream"):
         args += ["--repo", str(cfg["upstream"])]
     try:
-        r = subprocess.run(args, cwd=str(root), capture_output=True, text=True, timeout=90)
+        r = subprocess.run(args, cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90)
         out = (r.stdout + r.stderr).strip()
         return r.returncode == 0, out.splitlines()[-1] if out else ""
     except Exception as e:
@@ -1787,7 +1787,7 @@ def publish(if_changed: bool = False, dry_run: bool = False, from_hook: bool = F
     if shutil.which("gh") and cfg.get("pr", True):
         try:
             r = subprocess.run(["gh", "pr", "view", branch, "--json", "url", "-q", ".url"] + (["--repo", str(cfg["upstream"])] if cfg.get("upstream") else []),
-                               cwd=str(root), capture_output=True, text=True, timeout=60)
+                               cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             existing = r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
         except Exception:
             existing = None

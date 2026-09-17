@@ -7,7 +7,7 @@ description: "Add the self-maintaining layer to a skill being created (research 
 
 New skills are evergreen by default. This skill wraps whatever skill-authoring process is available (Anthropic's `skill-creator` when present; otherwise the guide below) and adds the maintenance layer. Protocol: `<plugin root>/protocol/PROTOCOL.md` §8; tiers: `protocol/INTERVALS.md`.
 
-Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path.
+Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude Code). `EG` below means `python "<plugin root>/scripts/evergreen.py"` with an absolute path (`python` on Windows, `python3` on macOS and Linux (whichever answers `-c "import sys"`; the hook probes the same way)).
 
 ## Step 0: freshness of this plugin (every use, one read)
 
@@ -31,6 +31,8 @@ Then run the tooling track before writing the body (PROTOCOL §4 and §8): GitHu
 Write the core action step so it leaves evidence: name the file, tool call, or record it produces and make the step confirm it before reporting done. A step that can only be checked by reading the reply cannot be tested and will fail the suite as a no-op.
 
 Pick the tier with the INTERVALS.md rubric. Topic with no time-sensitive claims → `none`. Unsure → `moderate`. Ask the user only when two tiers are both plausible.
+
+Put deterministic steps in a script when that is a net token saving without noise or mistakes (PROTOCOL.md §8): scaffold, checks, packing, probes; keep judgment in the skill text. Design for every platform unless the user says otherwise (PROTOCOL.md §8, PORTABILITY.md §Cross-platform by default): stdlib Python or POSIX `sh`, `pathlib` paths, `~` and per-OS maps for locations, UTF-8 and LF, no platform tool without a branch or a message. A platform-only feature is fine when the general route would be onerous; say which platforms the skill covers in its description.
 
 ## Step 3: scaffold with the layer
 
