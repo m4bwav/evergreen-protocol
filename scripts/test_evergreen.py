@@ -374,6 +374,7 @@ class Scaffold(unittest.TestCase):
         self.assertFalse((dest / "hooks").exists())
 
     def test_share_pack_drops_profile_and_the_owner_address(self):
+        cfg_before = (eg.plugin_root() / "evergreen.config.json").read_bytes()
         import zipfile
         out = Path(self.tmp.name) / "sharedist"
         before = sorted(p.name for p in (self.home / "baselines").iterdir()) if (self.home / "baselines").exists() else []
@@ -409,8 +410,8 @@ class Scaffold(unittest.TestCase):
         # a gift is not a report: no new baseline, and the owner's own config on disk is untouched
         after = sorted(p.name for p in (self.home / "baselines").iterdir()) if (self.home / "baselines").exists() else []
         self.assertEqual(before, after)
-        self.assertEqual(json.loads((eg.plugin_root() / "evergreen.config.json").read_text(encoding="utf-8"))["notify"]["to"],
-                         "owner@example.com")
+        # the owner's own config is untouched, whatever address it holds (a fork has a real one)
+        self.assertEqual((eg.plugin_root() / "evergreen.config.json").read_bytes(), cfg_before)
 
     def test_lint_wants_all_four_search_tracks(self):
         d = Path(self.tmp.name) / "tracks"
@@ -881,6 +882,7 @@ class Sync(unittest.TestCase):
 
     def test_hostile_patch_cannot_escape_or_change_config_or_code(self):
         trunk = self._trunk()
+        trunk_cfg_before = (trunk / "evergreen.config.json").read_bytes()
         hostile = (
             "diff --git a/../pwned.txt b/../pwned.txt\nnew file mode 100644\nindex 000000000000..aaaaaaaaaaaa\n--- /dev/null\n+++ b/../pwned.txt\n@@ -0,0 +1 @@\n+x\n"
             "diff --git a/.git/hooks/post-checkout b/.git/hooks/post-checkout\nnew file mode 100644\nindex 000000000000..aaaaaaaaaaaa\n--- /dev/null\n+++ b/.git/hooks/post-checkout\n@@ -0,0 +1 @@\n+x\n"
@@ -895,7 +897,7 @@ class Sync(unittest.TestCase):
         self.assertFalse((trunk / ".git" / "hooks" / "post-checkout").exists())
         self.assertFalse(Path("/tmp/abs.txt").exists() and "abs" in rep["applied"])
         self.assertEqual(len([s for s in rep["skipped"] if "unsafe path" in s]), 3)
-        self.assertIn("owner@example.com", (trunk / "evergreen.config.json").read_text(encoding="utf-8"))
+        self.assertEqual((trunk / "evergreen.config.json").read_bytes(), trunk_cfg_before)  # a patch never changes the config
         self.assertTrue(any("protected" in c for c in rep["conflicts"]))
         self.assertFalse((trunk / "scripts" / "evil.py").exists())
         self.assertTrue(any("CODE CHANGED" in c for c in rep["conflicts"]))
