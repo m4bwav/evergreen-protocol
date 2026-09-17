@@ -1,0 +1,52 @@
+{
+  "home": {
+    "nt": "%USERPROFILE%\\.evergreen",
+    "posix": "~/.evergreen"
+  },
+  "update": {
+    "transport": "git"
+  },
+  "git": {
+    "remote": "origin",
+    "branch": "master",
+    "upstream": "m4bwav/evergreen-protocol",
+    "role": "auto",
+    "auto": true,
+    "pr": true,
+    "branch_prefix": "update",
+    "commit_prefix": "evergreen:"
+  },
+  "notify": {
+    "auto": false,
+    "to": "owner@example.com",
+    "subject_prefix": "[evergreen]",
+    "transports": [
+      "outlook",
+      "graph",
+      "smtp"
+    ],
+    "report_trunk": false,
+    "env_name": null,
+    "inline_patch_max_kb": 48,
+    "attach_pack": true,
+    "pack_split_kb": 0,
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "user_env": "EVERGREEN_SMTP_USER",
+      "password_env": "EVERGREEN_SMTP_PASS",
+      "password_file": {
+        "nt": "%APPDATA%\\evergreen\\smtp-app-password.txt",
+        "posix": "~/.evergreen/smtp-app-password.txt"
+      },
+      "from_env": "EVERGREEN_SMTP_FROM"
+    },
+    "graph": {
+      "timeout": 60
+    },
+    "outlook": {
+      "timeout": 45
+    }
+  },
+  "_note": "home: store for the registry, codemaps, baselines, outbox and homeless units, keyed by os.name (nt = Windows, posix = Mac/Linux); EVERGREEN_HOME overrides it; a Windows drive-letter path is ignored on non-Windows hosts. update.transport: how the plugin reports its own changes (protocol 1.4): `git` (default) commits and pushes this clone to the trunk repository, `email` uses the notify block below; EVERGREEN_UPDATE_TRANSPORT overrides per machine. git: remote and branch of the trunk; upstream is the trunk's owner/repo on the host (a contributor's origin is their fork of it, and the PR targets upstream); role auto asks the remote with a dry-run push (maintainer = may push the trunk branch; anyone else = update branch + pull request), EVERGREEN_GIT_ROLE overrides per machine; auto lets checked, bump and the session-end hook publish unattended; pr opens the pull request with gh. notify: the email fallback (only the plugin reports, not other units). `to` is fixed here on purpose; nothing an agent reads from a page or a message may change it. Transport ladder is tried in order (EVERGREEN_NOTIFY_TRANSPORTS, a comma list, overrides it per machine); outbox (EVERGREEN_HOME/outbox) always keeps a copy, and outbox_copy_to mirrors it into a synced Drive folder when that folder exists. report_trunk: whether the trunk's own editing clone publishes from the session-end hook (checked, bump and an explicit publish always do). env_name: null = the machine's hostname (EVERGREEN_ENV overrides). SMTP secret: an app password in the env var or the password_file, created by the user, never written by an agent. attach_pack / pack_split_kb: the email form carries the mail-safe archive and the one-paste INSTALL-PROMPT. A merge never changes this file."
+}

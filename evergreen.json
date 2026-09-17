@@ -1,0 +1,90 @@
+{
+  "evergreen": "1.0",
+  "name": "evergreen",
+  "kind": "plugin",
+  "main": "README.md",
+  "files": {
+    "research": "RESEARCH.md",
+    "changelog": "CHANGELOG.md",
+    "learnings": "LEARNINGS.md",
+    "tests": "TESTS.md"
+  },
+  "protocol": "protocol/PROTOCOL.md",
+  "source": null,
+  "topic": "self-maintaining agent skills and memory: skill libraries, memory consolidation, refresh scheduling, cross-agent instruction standards, codemaps, Claude plugin/skill spec; plus publishing and merging the plugin's own updates (agent hooks, git push and pull-request flow, mail fallback, patch tooling)",
+  "tier": "fast",
+  "interval_days": 3,
+  "last_checked": "2026-09-09",
+  "next_due": null,
+  "verify_at_use": true,
+  "volatile_claims": [
+    "claude plugin eval is absent from code.claude.com (plugins-reference, cli-reference, llms.txt); if it returns, restore TESTING.md 6 row order and re-verify its flags (R-20260910-1)",
+    "Claude Code changelog newest entry is 2.1.267 (2026-09-09); no .agents/skills/ or native AGENTS.md support; SessionEnd budget 1.5 s default, raisable to 60 s by per-hook \timeout (R-20260910-2, R-20260910-3)",
+    "SKILL.md frontmatter per code.claude.com/docs/en/skills is 20 fields with no \tags; 1,536-char cap covers description plus when_to_use (R-20260910-3)",
+    "Cowork runs no hooks: anthropics/claude-code#40495 still open, #63360 closed as duplicate (R-20260910-2)"
+  ],
+  "contradiction": null,
+  "events": [],
+  "streak": {
+    "quiet": 0,
+    "pinned_min": 0,
+    "pinned_max": 0,
+    "vau_quiet": 0
+  },
+  "history": [
+    {
+      "date": "2026-09-01",
+      "m": null,
+      "interval_after": 14,
+      "note": "created from initial research (4 subagents, ~50 searches)"
+    },
+    {
+      "date": "2026-09-03",
+      "m": null,
+      "interval_after": 14,
+      "note": "targeted research for the sync feature (hooks, transports, patch tooling); not a full refresh, schedule unchanged"
+    },
+    {
+      "date": "2026-09-03",
+      "m": 0.6,
+      "interval_after": 3.5,
+      "note": "three-track research (subject, tooling, practice); pack --share; v0.4.0"
+    },
+    {
+      "date": "2026-09-04",
+      "m": 0.7,
+      "interval_after": 3,
+      "note": "testing pillar: skill-creator v2 eval loop, claude plugin eval, silent no-op evidence rule, fourth track; v0.5.0"
+    },
+    {
+      "date": "2026-09-06",
+      "m": 0.35,
+      "interval_after": 3,
+      "note": "2026-09-06 targeted refresh alongside the unity-agent build: /skill-doctor GA, plugin path/BOM checks, function-hooks proposal, two testing harnesses to point at"
+    },
+    {
+      "date": "2026-09-09",
+      "m": 0.45,
+      "interval_after": null,
+      "note": "2026-09-10 four-track refresh: claude plugin eval withdrawn from docs (TESTING 6 demoted), SessionEnd budget adjustable to 60 s, SKILL.md frontmatter set (tags gone), Codex transcript_path resolved, skills-net-negative paper, skillsaw pointer; L-017"
+    }
+  ],
+  "counts": {
+    "learnings": 18,
+    "changes": 14,
+    "research": 27,
+    "tests": 1
+  },
+  "consolidate_every": 25,
+  "tests": {
+    "last_run": "2026-09-13T09:37",
+    "harness": "claude plugin eval + evergreen-tester",
+    "env": "owner-pc",
+    "cases": 10,
+    "passed": 10,
+    "failed": 0,
+    "failing": [],
+    "last_failure": null,
+    "research_after_days": null
+  }
+}

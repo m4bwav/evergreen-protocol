@@ -1,0 +1,32 @@
+{
+  "name": "evergreen",
+  "version": "0.6.0",
+  "description": "Self-maintaining, self-proving skills and knowledge: adaptive web research on four tracks (the subject, the skills, plugins, MCP servers and knowledge graphs built for it, how others use agents on the same goal, and how they test that the job was done), never-teach-twice learnings capture, plugin-owned codemaps, a portable AI-preferences profile, and an eval suite per skill (trigger, action, outcome, decoys, baseline) that passes on evidence outside the transcript, with a bounded tuning loop that researches the subject's own testing when a skill fails. Converts existing skills and makes new ones evergreen by default. Lives in one git repository: every install is a clone that publishes its own self-updates back (straight to master from a maintainer's clone, a pull request from anyone else's), with email as the fallback route.",
+  "author": {
+    "name": "Mark Rogers"
+  },
+  "license": "MIT",
+  "keywords": [
+    "self-maintaining",
+    "skills",
+    "memory",
+    "learnings",
+    "codemap",
+    "research",
+    "tool-discovery",
+    "agents-md",
+    "sync",
+    "merge",
+    "evals",
+    "skill-testing",
+    "tuning",
+    "git",
+    "pull-request"
+  ],
+  "skills": "./skills",
+  "agents": [
+    "./agents/evergreen-researcher.md",
+    "./agents/evergreen-mapper.md",
+    "./agents/evergreen-tester.md"
+  ]
+}

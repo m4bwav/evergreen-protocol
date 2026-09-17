@@ -1,0 +1,12 @@
+# The trunk is a git repo (evergreen-merge folds remote update bundles into it). Keep generated things out.
+__pycache__/
+*.pyc
+*.zip
+*.plugin
+*.7z
+*.rej
+*.incoming
+*.orig
+MANIFEST.json
+.DS_Store
+evals/results/

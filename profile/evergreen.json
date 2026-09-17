@@ -1,0 +1,42 @@
+{
+  "evergreen": "1.0",
+  "name": "profile",
+  "kind": "profile",
+  "main": "AI-PREFERENCES.md",
+  "files": {
+    "environments": "ENVIRONMENTS.md",
+    "changelog": "CHANGELOG.md",
+    "learnings": "LEARNINGS.md"
+  },
+  "protocol": "../protocol/PROTOCOL.md",
+  "source": null,
+  "topic": "the owner's preferences for how AI agents work, and facts about their environments (learnings-driven, no web research)",
+  "tier": "none",
+  "interval_days": null,
+  "last_checked": "2026-09-17",
+  "next_due": null,
+  "verify_at_use": false,
+  "volatile_claims": [],
+  "contradiction": null,
+  "events": [],
+  "streak": {
+    "quiet": 0,
+    "pinned_min": 0,
+    "pinned_max": 0,
+    "vau_quiet": 0
+  },
+  "history": [
+    {
+      "date": "2026-09-17",
+      "m": null,
+      "interval_after": null,
+      "note": "created; tier none (starter profile)"
+    }
+  ],
+  "counts": {
+    "learnings": 0,
+    "changes": 1,
+    "research": 0
+  },
+  "consolidate_every": 25
+}

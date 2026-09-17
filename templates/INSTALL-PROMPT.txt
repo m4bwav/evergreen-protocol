@@ -1,0 +1,19 @@
+Install or update the Evergreen plugin (version {version}) from the files saved in this folder:
+
+    <<< PASTE THE FOLDER PATH HERE >>>
+
+Do every step yourself, without asking me anything unless a step fails. Finish with a report of a few lines.
+
+1. Find the archive in that folder: `evergreen-{version}{tag}-mail.zip` (or `evergreen-{version}{tag}.zip`). If the folder holds numbered pieces instead (`evergreen-{version}{tag}-mail.zip.part01`, `.part02`, ... possibly saved from several emails), join them in order, byte for byte with nothing between them, into `evergreen-{version}{tag}-mail.zip` first.
+2. Pick ROOT, the folder that will hold the plugin source. If `claude plugin list` already shows `evergreen@{marketplace}`, ROOT is the folder recorded for the `{marketplace}` marketplace in `~/.claude/plugins/known_marketplaces.json`. Otherwise ROOT is `~/claude-plugins` (Windows: `%USERPROFILE%\claude-plugins`); create it.
+3. Unzip the archive into a temporary folder. It contains `INSTALL.txt`, `INSTALL-PROMPT.txt`, and an `evergreen/` folder. Run `python <temp>/evergreen/scripts/evergreen.py unmail <temp>/evergreen` to restore any `name.ps1.txt` files to `name.ps1` (does nothing for the normal zip). Without Python, rename the files INSTALL.txt lists by hand.
+4. If `ROOT/evergreen` already exists, rename it to `ROOT/evergreen.bak-<today's date>`. Move the unzipped `evergreen/` folder to `ROOT/evergreen`.
+5. Make sure `ROOT/.claude-plugin/marketplace.json` exists with this content (create it, or add the plugin entry if the file is already there):
+   {"name": "{marketplace}", "owner": {"name": "{owner}"}, "plugins": [{"name": "evergreen", "source": "./evergreen", "description": "Self-maintaining skills and knowledge"}]}
+6. Register and install, in this order:
+   - `claude plugin marketplace list`. If `{marketplace}` is missing: `claude plugin marketplace add <ROOT>`. If present: `claude plugin marketplace update {marketplace}`.
+   - If `claude plugin list` shows `evergreen@{marketplace}`: `claude plugin uninstall evergreen@{marketplace}` (a reinstall is how the cached copy picks up the new files).
+   - `claude plugin install evergreen@{marketplace} --scope user`
+   - `claude plugin list`. It must show `evergreen@{marketplace}` as enabled. If it says "failed to load", show me the error and stop.
+7. Run `python ROOT/evergreen/scripts/evergreen.py audit --brief` and include its output in the report (a first run baselines the install from the archive's MANIFEST.json; that is expected).
+8. Report: where the plugin lives, the version in `ROOT/evergreen/.claude-plugin/plugin.json`, the audit output, and the reminder that I should start a new Claude Code session and run the `evergreen-audit` skill once. Remove the temporary folder.

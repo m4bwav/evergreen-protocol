@@ -1,0 +1,53 @@
+# Research: {{NAME}}
+
+Findings that back [{{MAIN}}]({{MAIN}}). Changes they caused are logged in [CHANGELOG.md](CHANGELOG.md); procedural lessons live in [LEARNINGS.md](LEARNINGS.md); test runs and their evidence in [TESTS.md](TESTS.md); schedule and state in `evergreen.json`. Protocol: {{PROTOCOL}}.
+
+Topic: {{TOPIC}}. Tier `{{TIER}}`. Last refresh {{DATE}}; next due {{NEXT_DUE}}.
+
+## Current understanding
+
+<The 5 to 40 lines a reader needs to trust the main file: what is settled, what is contested, what is moving. Edit sentences in place on refresh; never regenerate the section.>
+
+## Open questions
+
+- <Things the last refresh could not settle. Resolve or carry forward each refresh.>
+
+## Search plan
+
+Four tracks; every refresh runs at least one query on each (scope each to the period since the last refresh; add the year). Protocol §4 explains the tracks and how tooling, practice and testing findings are judged.
+
+Subject (the goal and the latest thinking on reaching it):
+
+- `<query 1>`
+- `<query 2>`
+
+Tooling (skills, plugins, MCP servers, scripts, knowledge graphs built for this subject):
+
+- `path:SKILL.md "<topic>"` on GitHub code search, sorted by recently updated; `npx skills find "<topic>"` and skills.sh for install counts
+- `https://registry.modelcontextprotocol.io/v0/servers?search=<topic>`; fallback `"<topic>" mcp server site:glama.ai OR site:pulsemcp.com`
+- `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`
+
+Practice (how others use AI agents on this goal, and everything in between):
+
+- `"how I use" OR "my workflow" "<topic>" "claude code" OR codex OR cursor <year>`
+- `site:arxiv.org "<topic>" agent "case study" OR empirical OR telemetry <year>`
+- `"<topic>" site:simonwillison.net OR site:latent.space OR site:anthropic.com/engineering <year>`; hn.algolia.com `"<topic>" agent` sorted by date
+
+Testing (how work on this subject is verified, and how skills for it are tuned):
+
+- `"<topic>" verify OR validate OR "smoke test" OR checker agent <year>` (what evidence shows the job was done)
+- `path:SKILL.md "<topic>" test OR eval OR evals` on GitHub; `"<topic>" evals OR "eval suite" OR regression "agent skill" <year>`
+- `site:arxiv.org "<topic>" agent evaluation OR benchmark <year>`; promptfoo, Inspect or DeepEval docs for assertion types that fit this subject
+
+Best sources (primary first): <official docs / changelog / standards body / key papers; for tooling: skills.sh, the MCP registry, the anthropics plugin catalogs; for testing: the subject's own test tools and the eval-framework docs>. Sources that proved noisy: <list, so they are skipped next time; SEO "top 10" listicles and scraped mega-directories are noise by default>.
+
+## Findings log
+
+Newest first. One entry per material finding; a quiet refresh gets one entry saying so. `Track` is subject, tooling, practice, or testing.
+
+### R-{{DATEID}}-1 · {{DATE}} · Initial research
+- Summary: <what was found and why it matters for the main file; say which tracks were searched and what the tooling and testing tracks turned up, even if nothing>
+- Track: subject
+- Sources: <url>, <url>
+- Magnitude: n/a (initial)
+- Applied: C-{{DATEID}}-1

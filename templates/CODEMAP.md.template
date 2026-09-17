@@ -1,0 +1,42 @@
+# CODEMAP: {{NAME}}
+
+<!-- evergreen · generated-at {{SHA}} · verified {{DATE}} · coverage: <dirs seen> · not seen: <dirs> -->
+> Built by an AI during exploration of `{{REPO}}` for specific questions (log at the bottom). May be out of date, incomplete, or confused. Verify load-bearing claims in the code before acting. Drift check: `git log --oneline {{SHA}}..HEAD | wc -l` or `evergreen.py drift`. Markers: ✓ verified by reading or running · ~ inferred · ? unverified. Companions: [LEARNINGS.md](LEARNINGS.md) (repo gotchas beyond the map), [CHANGELOG.md](CHANGELOG.md), `evergreen.json`. Protocol: {{PROTOCOL}} (CODEMAP-FORMAT).
+
+## What it is
+<3 to 5 sentences: problem domain, who uses it, what "done" means. Not the stack.>
+
+## Stack and commands
+- Stack: <languages, frameworks, versions> ~
+- Build: `<cmd>` ?
+- Test: `<cmd>` ?
+- Run: `<cmd>` ?
+
+## Entry points
+- `<file>` `<symbol>`: <what it starts> ~
+
+## Codemap
+| Directory | Responsibility | Notes |
+|---|---|---|
+| `<dir>/` | <one line> | ~ |
+
+## Critical flows
+1. <flow name>: `<A>` → `<B>` → `<C>` ~
+
+## State, config, environment
+- Sources of truth: <db / files / caches; which wins> ~
+- Config read at: `<file:symbol>`; env vars: <names only> ~
+
+## Invariants and boundaries
+- <"nothing in X imports Y"; layer rules> ~
+
+## Gotchas
+- <fragile files, "touching X breaks Y", flaky tests> ~
+
+## Not explored
+- <directories and subsystems the map has not looked at>
+
+## Questions answered here
+| Date | Question | Files read | Outcome |
+|---|---|---|---|
+| {{DATE}} | <the question that started this map> | <files> | <one line> |

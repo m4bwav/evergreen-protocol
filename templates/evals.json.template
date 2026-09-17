@@ -1,0 +1,61 @@
+{
+  "skill": "{{NAME}}",
+  "_format": "skill-creator evals.json plus evergreen fields (kind, decoy, evidence, baseline); extra fields are ignored by skill-creator's runner. Rules: protocol/TESTING.md.",
+  "evals": [
+    {
+      "id": "trigger-1",
+      "kind": "trigger",
+      "prompt": "TODO: a request phrased the way the user actually asks for this skill",
+      "expectations": ["the {{NAME}} skill is invoked"],
+      "runs": 3
+    },
+    {
+      "id": "trigger-2",
+      "kind": "trigger",
+      "prompt": "TODO: a second, casual phrasing that should still trigger it",
+      "expectations": ["the {{NAME}} skill is invoked"],
+      "runs": 3
+    },
+    {
+      "id": "decoy-1",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "TODO: a nearby request that must NOT trigger it (a sibling skill's job, or plain conversation)",
+      "expectations": ["the {{NAME}} skill is not invoked"],
+      "runs": 3
+    },
+    {
+      "id": "decoy-2",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "TODO: a second decoy",
+      "expectations": ["the {{NAME}} skill is not invoked"],
+      "runs": 3
+    },
+    {
+      "id": "action-1",
+      "kind": "action",
+      "prompt": "TODO: a request whose fulfilment requires the skill's core action (a delegation, a tool call, a write, a remote job)",
+      "expectations": ["the action happened, proven by the evidence below, not by the reply saying so"],
+      "evidence": {
+        "type": "trace",
+        "tool": "TODO: tool name the action must call (Bash, an MCP tool, a script)",
+        "input_match": "TODO: regex over the tool input, or omit",
+        "or": {"type": "file", "path": "TODO: a file or marker the action leaves behind, or omit"}
+      },
+      "baseline": "TODO: what a fresh session does with this prompt when the skill is not loaded (filled by the first run)",
+      "runs": 3
+    },
+    {
+      "id": "outcome-1",
+      "kind": "outcome",
+      "prompt": "TODO: a request with a checkable result",
+      "files": [],
+      "expectations": [
+        "TODO: a deterministic check first (a value, a regex on the output, a file that exists)",
+        "TODO: a quality criterion for a judge second, if needed"
+      ],
+      "runs": 3
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "skill": "evergreen",
+  "_format": "skill-creator evals.json plus evergreen fields (kind, decoy, evidence, baseline, runs); extra fields are ignored by skill-creator's runner. Rules: protocol/TESTING.md. The plugin is one unit, so these cases cover its skills together; the harness is the evergreen-tester agent unless claude plugin eval or skill-creator is present.",
+  "evals": [
+    {
+      "id": "trigger-1",
+      "kind": "trigger",
+      "prompt": "My comfyui skill is supposed to hand the render off to the Mac, but nothing ever shows up in the Mac's queue. It keeps saying it delegated. Can you figure out why and fix the skill?",
+      "expectations": [
+        "the evergreen-tune skill is invoked (a failure in use of a skill, not application code)"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 fired"
+    },
+    {
+      "id": "trigger-2",
+      "kind": "trigger",
+      "prompt": "Write tests for the acestep-music skill and run them, I want to know it actually triggers and actually saves a file.",
+      "expectations": [
+        "the evergreen-test skill is invoked"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 fired"
+    },
+    {
+      "id": "trigger-3",
+      "kind": "trigger",
+      "prompt": "Is the evergreen plugin's research stale? If so bring it up to date.",
+      "expectations": [
+        "the evergreen-refresh skill (or evergreen-audit, then evergreen-refresh) is invoked"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 fired"
+    },
+    {
+      "id": "decoy-1",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "Run the unit tests in this repo and tell me which ones fail.",
+      "expectations": [
+        "no evergreen skill is invoked; the repo's own test runner is used"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: no evergreen skill fired 3/3 (correct)"
+    },
+    {
+      "id": "decoy-2",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "The delegate() function in worker.py has a bug where it never sends the job to the queue, fix it.",
+      "expectations": [
+        "evergreen-tune is not invoked; this is application code, not a skill"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: no evergreen skill fired 3/3 (correct)"
+    },
+    {
+      "id": "action-1",
+      "kind": "action",
+      "prompt": "Copy evals/fixtures/sample-skill from the evergreen plugin to a temp folder and make that copy evergreen with a test suite.",
+      "expectations": [
+        "the copy ends up with evergreen.json, RESEARCH.md, CHANGELOG.md, LEARNINGS.md, TESTS.md and evals/evals.json, produced by the script or by hand from the templates"
+      ],
+      "evidence": {
+        "type": "trace",
+        "tool": "Bash",
+        "input_match": "evergreen\\.py\\s+(init|test-init)",
+        "or": {
+          "type": "file",
+          "path": "<temp folder>/evals/evals.json"
+        }
+      },
+      "baseline": "2026-09-13 tester agent, skill absent: passed anyway (init + test-init found via `evergreen.py --help`, all six files present); the prompt names the script, so the case is redundant as written",
+      "runs": 3
+    },
+    {
+      "id": "action-2",
+      "kind": "action",
+      "prompt": "The tester ran action-1 of the sample-skill unit at evals/fixtures/sample-skill three times and reported 'Evidence found: absent' every time, while the skill's reply said the file was written. Record that failure on the unit the way the protocol says to.",
+      "expectations": [
+        "evergreen.py failed is run on the unit with class no-op (or evergreen.json.tests.failing is edited by hand to contain action-1); the reply does not merely describe what should be done"
+      ],
+      "evidence": {
+        "type": "trace",
+        "tool": "Bash",
+        "input_match": "evergreen\\.py\\s+failed\\s+.*--class\\s+no-op",
+        "or": {
+          "type": "command",
+          "run": "python scripts/evergreen.py status evals/fixtures/sample-skill",
+          "expect": "failing-tests:1"
+        }
+      },
+      "baseline": "2026-09-13 tester agent, skill absent: passed anyway (`failed --class no-op` found via `--help`, tests.failing = [action-1]); redundant as written",
+      "runs": 3
+    },
+    {
+      "id": "outcome-1",
+      "kind": "outcome",
+      "prompt": "In one paragraph: what does the evergreen protocol say a skill test may pass on, and what may it never pass on?",
+      "files": [],
+      "expectations": [
+        "the answer names evidence outside the transcript (a tool call in the trace, a file, a marker, a log line or a remote record) as what a test passes on",
+        "the answer says a test never passes on the reply's own claim that the action was done",
+        "regex on the answer: (evidence|trace|file|marker).*(never|not).*(claim|reply|transcript|prose)"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 on the judge, regex hit once by chance"
+    },
+    {
+      "id": "trigger-6",
+      "kind": "trigger",
+      "prompt": "The evergreen plugin picked up two learnings and a refresh on this laptop. Push those changes to the repo so they land on master, or open a PR if this machine isn't allowed to push.",
+      "expectations": [
+        "the evergreen-publish skill is invoked (publishing the plugin's own changes to the trunk repository, not emailing them)",
+        "evidence: a `publish` (or `notify`) invocation of scripts/evergreen.py in the trace, or a new commit on the clone's branch"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 fired"
+    },
+    {
+      "id": "decoy-3",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "Push my feature branch for the checkout service and open a PR against main; the reviewers are on the team list.",
+      "expectations": [
+        "no evergreen skill is invoked: this is the user's application repository, not the plugin's self-update"
+      ],
+      "runs": 3,
+      "baseline": "2026-09-13 claude plugin eval, no plugin: no evergreen skill fired 3/3 (correct)"
+    }
+  ]
+}

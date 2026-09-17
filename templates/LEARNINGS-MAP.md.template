@@ -1,0 +1,17 @@
+# Learnings: {{NAME}} (codemap)
+
+Repo lessons that go beyond structure: procedures that only work one way, tooling quirks, things that bit a session. Structural gotchas belong in the Gotchas section of [CODEMAP.md](CODEMAP.md); every change is logged in [CHANGELOG.md](CHANGELOG.md); state in `evergreen.json`. Format and gate: {{PROTOCOL}} (LEARNINGS-FORMAT). Retired entries go to LEARNINGS-ARCHIVE.md with a reason.
+
+Scope for entries here is `repo:{{NAME}}`. Trigger and Hypothesis are required.
+
+## Active
+
+<!-- Example (delete once you have a real entry):
+### L-001 · {{DATE}} · One-line lesson
+- Trigger: what happened, with dates or counts
+- Hypothesis: why
+- Rule: the shortest instruction that prevents the trigger
+- Evidence: C-{{DATEID}}-1, files or commits
+- Scope: repo:{{NAME}}
+- Status: active · helpful 0 · harmful 0 · last_confirmed {{DATE}}
+-->

@@ -1,0 +1,8 @@
+# Changelog: {{NAME}} (codemap)
+
+Every change to [CODEMAP.md](CODEMAP.md) and [LEARNINGS.md](LEARNINGS.md), newest first, with the reason (a question answered, drift re-verified, a claim the code contradicted). State in `evergreen.json`. Protocol: {{PROTOCOL}} (CODEMAP-FORMAT).
+
+### C-{{DATEID}}-1 · {{DATE}} · Map created
+- because: first exploration of `{{REPO}}`
+- files: CODEMAP.md, LEARNINGS.md, evergreen.json
+- Stamped at commit {{SHA}}. Coverage and markers in the map header.

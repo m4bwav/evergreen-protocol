@@ -1,0 +1,15 @@
+<!-- Evergreen block: paste into a repo's AGENTS.md (the cross-tool instruction file). Adjust paths. -->
+
+## Evergreen (self-maintaining knowledge)
+
+This repo follows the Evergreen Protocol: skills and docs refresh themselves from primary sources on an adaptive schedule, and lessons are written down so nobody teaches an agent the same thing twice.
+
+- Preferences: read `<path-to>/evergreen/profile/AI-PREFERENCES.md` before substantial work. Environment facts: `<path-to>/evergreen/profile/ENVIRONMENTS.md`.
+- Model knowledge is a stale snapshot on anything fast-moving (AI tooling, APIs, prices, policies, libraries). Search primary sources before asserting time-sensitive facts.
+- Research the subject and the AI ecosystem around it. Alongside the topic itself, look at what has been built for it (skills, plugins, MCP servers, scripts, knowledge graphs), how other people are using agents on the same goal, and how they verify the job was done, before writing a procedure that duplicates one of them.
+- Before using any folder that contains `evergreen.json`, read it. If `next_due` has passed or `contradiction` is set, say so in one line, do the task, then refresh in the same session (procedure in that folder's `MAINTENANCE.md` or `evergreen/protocol/PROTOCOL.md`). If `tests.failing` is non-empty, say so and run the tuning loop after the task.
+- A skill is proven by evidence outside the transcript (a tool call in the trace, a file, a marker, a record), never by its reply saying it did the thing. Every skill carries `evals/evals.json` and `TESTS.md`; run the suite after editing a skill, and when a skill fails in use, reproduce, classify, learn, research if stale, fix, re-run (`evergreen/protocol/TESTING.md`).
+- When corrected, when the same error happens twice, when a workaround is found, or when an environment fact is discovered, write a learning immediately (`LEARNINGS.md` of the unit in use; else the codemap's Gotchas; else the profile). Check existing entries first; include Trigger and Hypothesis.
+- Codemap for this repo: `docs/CODEMAP.md` (if present) or `$EVERGREEN_HOME/maps/<slug>/CODEMAP.md`. It may be stale, incomplete, or confused: verify load-bearing claims in code, check drift against the stamped sha, and update the map with what you learn.
+- New skills are evergreen by default (scaffold with `evergreen/scripts/evergreen.py init`), unless asked for a plain skill.
+- Before finishing a substantial task, ask: did I learn something a future session would need? If yes, record it.
