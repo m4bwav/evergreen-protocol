@@ -988,6 +988,7 @@ class GitTransport(unittest.TestCase):
         seed = t / "seed"
         shutil.copytree(eg.plugin_root(), seed, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git", "*.zip", "*.plugin"))
         self._g(seed, "init", "-q", "--initial-branch=master")
+        self._g(seed, "config", "user.name", "Test"); self._g(seed, "config", "user.email", "t@example.com")  # CI runners have no git identity
         self._g(seed, "add", "-A"); self._g(seed, "commit", "-q", "-m", "seed")
         self._g(seed, "remote", "add", "origin", str(self.bare)); self._g(seed, "push", "-q", "origin", "master")
         self.clone = t / "evergreen"

@@ -493,7 +493,8 @@ def build_bundle(out_dir: Path | None = None, quiet: bool = False) -> dict | Non
                 "files": [{k: v for k, v in c.items() if k not in ("entries", "state", "state_new")} for c in changes],
                 "state": {c["path"]: c["state_new"] for c in changes if c.get("state_new")}}
     (d / "UPDATE.md").write_text(update, encoding="utf-8")
-    (d / "changes.patch").write_text(patch, encoding="utf-8", newline="\n")
+    with open(d / "changes.patch", "w", encoding="utf-8", newline="\n") as f:  # Path.write_text(newline=) is 3.10+
+        f.write(patch)
     (d / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (d / "STATUS").write_text("unsent\n", encoding="utf-8")
     # snapshot of the changed files as they are now, so a later --mark-sent advances the baseline to exactly this
