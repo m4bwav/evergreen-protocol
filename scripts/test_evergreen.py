@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+for _k in ("CI", "DO_NOT_TRACK", "EVERGREEN_CONTRIBUTE"):  # the suite models a person's install; a CI runner would read as "contribute no"
+    os.environ.pop(_k, None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import evergreen as eg  # noqa: E402
