@@ -232,6 +232,7 @@ class Scaffold(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name) / "home"
         os.environ["EVERGREEN_HOME"] = str(self.home)
+        eg.set_contribute("yes")
 
     def tearDown(self):
         os.environ.pop("EVERGREEN_HOME", None)
@@ -653,6 +654,13 @@ class Scaffold(unittest.TestCase):
         eg.export(d)
         self.assertNotIn(b"\r", (d / ".agents" / "scripts" / "evergreen-hook.sh").read_bytes())
 
+    def test_brief_audit_nudges_until_the_contribution_choice_is_made(self):
+        reg = eg.load_registry(); reg.pop("contribute", None); eg.save_registry(reg)
+        self.assertIn("contribution not decided", capture(["audit", "--brief", "--roots", str(Path(self.tmp.name))]))
+        eg.set_contribute("no")
+        self.assertEqual(capture(["audit", "--brief", "--roots", str(Path(self.tmp.name))]), "")
+        self.assertIn("contribute no", capture(["contribute"]))
+
     def test_plugin_own_unit_is_clean(self):
         root = eg.plugin_root()
         _, st = eg.load_state(root)
@@ -687,6 +695,7 @@ class Sync(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name) / "home"
         os.environ["EVERGREEN_HOME"] = str(self.home)
+        eg.set_contribute("yes")  # an install that answered yes; the choice itself is tested in GitTransport
         self.copy = Path(self.tmp.name) / "evergreen"
         src = eg.plugin_root()
         import shutil
@@ -998,6 +1007,7 @@ class GitTransport(unittest.TestCase):
         self._g(self.clone, "config", "user.name", "Test"); self._g(self.clone, "config", "user.email", "t@example.com")
         self._root = eg.plugin_root
         eg.plugin_root = lambda: self.clone
+        eg.set_contribute("yes")  # the fixtures model an install that answered yes at install time
         self._cfg = es.git_config
         self.cfg = dict(es.GIT_DEFAULTS, role="auto", pr=False)
         es.git_config = lambda: self.cfg
@@ -1017,6 +1027,32 @@ class GitTransport(unittest.TestCase):
     def _edit(self):
         p = self.clone / "LEARNINGS.md"
         p.write_text(p.read_text(encoding="utf-8") + "\n### L-901 · 2026-09-13 · Git transport lesson\n- Trigger: test\n- Hypothesis: test\n", encoding="utf-8")
+
+    def test_contribution_choice_gates_publish(self):
+        os.environ.pop("EVERGREEN_CONTRIBUTE", None); os.environ.pop("DO_NOT_TRACK", None)
+        self._edit()
+        # undecided: unattended entry points stay silent and push nothing; an explicit publish asks
+        reg = eg.load_registry(); reg.pop("contribute", None); eg.save_registry(reg)
+        self.assertEqual(es.publish(if_changed=True), "")
+        self.assertIn("not decided", es.publish())
+        self.assertEqual(self._g(self.clone, "status", "--porcelain").strip() != "", True)
+        # no: nothing leaves, by either route
+        eg.set_contribute("no")
+        self.assertEqual(es.publish(if_changed=True), "")
+        self.assertIn("contribution is off", es.publish())
+        os.environ["EVERGREEN_UPDATE_TRANSPORT"] = "email"
+        try:
+            self.assertIn("contribution is off", es.notify())
+        finally:
+            os.environ.pop("EVERGREEN_UPDATE_TRANSPORT", None)
+        self.assertEqual(self._g(self.bare, "log", "--oneline", "master").count("\n"), 0)
+        # DO_NOT_TRACK counts as no even when the registry says yes
+        eg.set_contribute("yes"); os.environ["DO_NOT_TRACK"] = "1"
+        try:
+            self.assertEqual(eg.contribute_setting(), "no")
+        finally:
+            os.environ.pop("DO_NOT_TRACK", None)
+        self.assertEqual(eg.contribute_setting(), "yes")
 
     def test_publish_nothing_then_push_as_maintainer(self):
         self.assertEqual(es.publish(if_changed=True), "")

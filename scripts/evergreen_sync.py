@@ -806,6 +806,9 @@ def notify(if_changed: bool = False, transport: str | None = None, to: str | Non
         return f"marked {b['id']} sent via {via or 'agent'}; baseline advanced"
     if if_changed and not cfg.get("auto"):
         return ""  # unattended entry points respect notify.auto; an explicit `notify` still sends
+    gate = contribute_gate(if_changed or from_hook)
+    if gate is not None:
+        return gate
     if from_hook and is_trunk() and not cfg.get("report_trunk"):
         return ""  # the trunk does not mail itself at every session end while being edited; checked/bump/explicit still do
     if not to:
@@ -1543,6 +1546,7 @@ def where() -> dict:
             "registry_plugin_root": reg.get("plugin_root"), "env": env_name(cfg), "is_trunk": is_trunk(),
             "baseline": {k: base.get(k) for k in ("taken", "version", "pack_id", "note")} if base else None, "baseline_note": note,
             "git": {"repo": trunk_git, "branch": branch, "dirty": dirty},
+            "contribute": eg.contribute_setting(),
             "update": {"transport": update_transport(), **git_status_summary(root, git_config()), "last_publish": load_publish_state().get("last")},
             "notify": {"auto": cfg.get("auto"), "to": cfg.get("to"), "transports": cfg.get("transports"),
                        "smtp_ready": all(smtp_credentials(cfg)[:2]), "outbox_copy_to": per_os(cfg.get("outbox_copy_to"))},
@@ -1696,7 +1700,9 @@ def open_pull_request(root: Path, cfg: dict, branch: str, title: str, body: str)
     """`gh pr create` against the trunk (cfg.upstream when set; gh detects a fork's parent otherwise)."""
     if not shutil.which("gh"):
         return False, "gh is not installed; open the pull request by hand"
-    args = ["gh", "pr", "create", "--base", cfg["branch"], "--head", branch, "--title", title, "--body", body]
+    # a draft, in the user's name: the person who said yes at install reviews it before anyone else does
+    body = body.rstrip() + f"\n\nOpened by the evergreen plugin from `{env_name()}` with the owner's consent (`evergreen.py contribute yes`); file diffs only, no transcripts. Reviewer: the repository owner."
+    args = ["gh", "pr", "create", "--draft", "--base", cfg["branch"], "--head", branch, "--title", title, "--body", body]
     if cfg.get("upstream"):
         args += ["--repo", str(cfg["upstream"])]
     try:
@@ -1705,6 +1711,18 @@ def open_pull_request(root: Path, cfg: dict, branch: str, title: str, body: str)
         return r.returncode == 0, out.splitlines()[-1] if out else ""
     except Exception as e:
         return False, str(e)
+
+
+def contribute_gate(unattended: bool) -> str | None:
+    """None when this install may send; otherwise the message to return instead of sending. The install-time
+    choice (PROTOCOL.md section 10): 'no' means nothing leaves the machine by any route; undecided means nothing
+    leaves unattended, and an explicit publish or notify says what to decide."""
+    v = eg.contribute_setting()
+    if v == "yes":
+        return None
+    if v == "no":
+        return "" if unattended else "contribution is off on this install (`evergreen.py contribute yes` to allow pull requests); updates still arrive with `pull`"
+    return "" if unattended else "not decided on this install: " + eg.CONTRIBUTE_QUESTION
 
 
 def publish(if_changed: bool = False, dry_run: bool = False, from_hook: bool = False, message: str | None = None,
@@ -1721,6 +1739,9 @@ def publish(if_changed: bool = False, dry_run: bool = False, from_hook: bool = F
         return "" if if_changed else f"{root} is not a git clone; install from the repository first (README section Install)"
     if if_changed and not cfg.get("auto", True):
         return ""
+    gate = contribute_gate(if_changed or from_hook)
+    if gate is not None:
+        return gate
     if from_hook and is_trunk() and not (notify_config().get("report_trunk")):
         return ""  # the maintainer's editing clone does not push half-done work from a session-end hook
     remote = cfg["remote"]
@@ -1964,6 +1985,8 @@ def cmd_where(a):
         print(f"        {w['baseline_note']}")
     g = w["git"]
     print(f"git     {'repo on ' + str(g['branch']) + (' (dirty)' if g['dirty'] else ' (clean)') if g['repo'] else 'not a repo'}")
+    c = w.get("contribute")
+    print(f"contribute {c}" if c else "contribute not decided (ask the user; `evergreen.py contribute yes|no`)")
     u = w["update"]
     if u.get("repo"):
         print(f"update  transport={u['transport']} remote={u.get('remote')} trunk={u.get('trunk_branch')} role={u.get('role')}"

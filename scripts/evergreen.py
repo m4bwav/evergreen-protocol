@@ -7,6 +7,7 @@ it is safe to run from a session-start hook; add --strict to exit non-zero.
 Commands
   home                              print EVERGREEN_HOME
   status  <unit>                    one-line freshness report
+  contribute [yes|no|status]                      may this install open pull requests with its learnings? (asked once at install)
   audit   [--brief] [--json] [--checks] [--roots P ...]   all known units
   next    <unit> --m 0.4            dry-run the interval rule
   checked <unit> --m 0.4 [--note ..] [--contradiction] [--use-time]
@@ -222,6 +223,57 @@ def save_registry(reg: dict) -> None:
     p = registry_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+# ---------- contribution choice (PROTOCOL.md section 10) ----------
+# Asked once at install: may this install send its learnings back to the official repository as pull requests?
+# The answer lives in the registry (the store, per install), so a `pull` can never overwrite it. Until it is
+# answered nothing leaves the machine unattended; `pull` works regardless. EVERGREEN_CONTRIBUTE=yes|no overrides
+# per session; DO_NOT_TRACK=1 (donottrack.sh) and CI=true count as no.
+
+def contribute_setting() -> str | None:
+    """'yes', 'no', or None when the question has not been answered on this install."""
+    env = os.environ.get("EVERGREEN_CONTRIBUTE", "").strip().lower()
+    if env in ("yes", "no"):
+        return env
+    if os.environ.get("DO_NOT_TRACK", "").strip() not in ("", "0", "false"):
+        return "no"
+    if os.environ.get("CI", "").strip().lower() in ("1", "true", "yes"):
+        return "no"  # a CI runner never answered the question and never contributes
+    v = load_registry().get("contribute")
+    return v if v in ("yes", "no") else None
+
+
+def set_contribute(value: str) -> None:
+    reg = load_registry()
+    reg["contribute"] = value
+    reg["contribute_decided"] = datetime.now().strftime("%Y-%m-%d")
+    reg["contribute_asked_by_version"] = plugin_version()  # re-ask only if what is shared ever widens, never on a version bump
+    save_registry(reg)
+
+
+CONTRIBUTE_QUESTION = (
+    "May this install send its learnings back to the official Evergreen repository? "
+    "'yes': when the plugin's own files change here (a lesson, a research finding, a test run) the change is pushed as a "
+    "pull request that the maintainer reviews; you can revoke it at any time. "
+    "'no': nothing ever leaves this machine (no pull requests, no email, no reports); updates still arrive with `pull`. "
+    "Answer with `evergreen.py contribute yes` or `evergreen.py contribute no`."
+)
+
+
+def cmd_contribute(a):
+    if a.value in ("yes", "no"):
+        set_contribute(a.value)
+        print(f"contribute {a.value}: " + ("this install may open pull requests with its learnings; `contribute no` revokes it"
+                                           if a.value == "yes" else
+                                           "nothing leaves this machine; updates still arrive with `pull`"))
+        return
+    v = contribute_setting()
+    src = "EVERGREEN_CONTRIBUTE" if os.environ.get("EVERGREEN_CONTRIBUTE") else ("DO_NOT_TRACK" if v == "no" and os.environ.get("DO_NOT_TRACK") else "registry")
+    if v is None:
+        print("contribute: not decided on this install. " + CONTRIBUTE_QUESTION)
+    else:
+        print(f"contribute {v} ({src})")
 
 
 def register(unit: Path, st: dict) -> None:
@@ -1191,6 +1243,8 @@ def cmd_audit(a):
     if a.brief:
         if stale:
             print(f"[evergreen] {stale} unit(s) due for refresh. Do the user's task first, then run evergreen-refresh in this session.")
+        if contribute_setting() is None:
+            print("[evergreen] contribution not decided on this install: ask the user once, then run `evergreen.py contribute yes|no` (see `evergreen.py contribute`).")
         return
     print(f"-- {len(units)} unit(s), {stale} stale" + (f", {problems} problem(s)" if a.checks else "")
           + (f", {failing} with failing tests" if failing else "") + f", home {evergreen_home()}")
@@ -1558,6 +1612,8 @@ def main(argv=None):
 
     sp.add_parser("home", parents=[common]).set_defaults(fn=cmd_home)
     s = sp.add_parser("status", parents=[common]); s.add_argument("unit"); s.set_defaults(fn=cmd_status)
+    s = sp.add_parser("contribute", parents=[common], help="the install-time choice: may this install send its learnings upstream as pull requests? (yes|no|status)")
+    s.add_argument("value", nargs="?", choices=["yes", "no", "status"]); s.set_defaults(fn=cmd_contribute)
     s = sp.add_parser("audit", parents=[common]); s.add_argument("--brief", action="store_true"); s.add_argument("--json", action="store_true")
     s.add_argument("--checks", action="store_true", help="also run links + lint per unit"); s.add_argument("--roots", nargs="*"); s.set_defaults(fn=cmd_audit)
     for name, fn in (("next", cmd_next), ("checked", cmd_checked)):
