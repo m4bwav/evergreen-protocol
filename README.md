@@ -40,6 +40,10 @@ This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the eviden
 6. When the plugin changes itself, wherever it is installed, it commits the change with a subject naming the new entries and pushes it to the trunk repository: straight to `master` when the clone is a maintainer's, as an update branch and a pull request when it is anyone else's. The owner merges pull requests on the host; every other clone pulls. One repository, fixed in config; nothing is ever force-pushed; email remains the fallback for a machine that cannot reach it.
 7. Every skill carries a suite (`evals/evals.json`, skill-creator's format plus evergreen fields) with trigger prompts and decoys, action cases that pass only on evidence outside the transcript (a tool call in the trace, a file, a marker, a remote record; never the reply saying "done"), outcome cases, and a baseline of what a fresh context does without the skill. Runs are logged in `TESTS.md`; a failing case is a Step 0 signal like a contradiction. When a case fails, or the skill fails in use, the tuning loop reproduces it in a fresh context, classifies it (undertrigger, overtrigger, no-op, fallback, wrong-outcome, environment, harness), writes the learning, researches the subject's own testing and tooling when the unit's research is older than half its interval (always for no-op and fallback), makes the smallest edit for the class, and re-runs; three iterations, then it reports what it tried.
 
+## Releases
+
+Official releases are on the repository's Releases page: each `vX.Y.Z` tag builds `evergreen-<version>-share.zip` (the plugin folder), `evergreen-share.plugin` (for Cowork) and the one-paste install prompt, after the suite passes on the release runner. The version is `.claude-plugin/plugin.json`; the reasoned history is [CHANGELOG.md](CHANGELOG.md).
+
 ## Install
 
 Prerequisites: git, Python 3.9+ (`python` on Windows, `python3` on macOS and Linux; on macOS that means the Xcode Command Line Tools or a python.org install), and `gh` for pull requests. Nothing else: the scripts are stdlib only and the hooks are POSIX `sh`, which Claude Code on Windows runs through Git Bash.

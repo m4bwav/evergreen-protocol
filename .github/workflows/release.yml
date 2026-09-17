@@ -1,0 +1,42 @@
+# Official releases. Push a tag `vX.Y.Z` (matching .claude-plugin/plugin.json) and this job runs the suite,
+# packs the share form of the plugin (no profile/, placeholder config) and publishes a GitHub Release with:
+#   evergreen-<version>-share.zip            the plugin folder, for Claude Code and any agent that reads markdown
+#   evergreen-share.plugin                   the flat form Cowork's "Save plugin" button installs
+#   evergreen-<version>-share-INSTALL-PROMPT.txt  the one-paste install prompt
+# Release notes are generated from the commits since the previous tag; CHANGELOG.md has the reasoned entries.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: version in plugin.json must match the tag
+        run: |
+          v=$(python -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "plugin.json says $v, tag is ${GITHUB_REF_NAME}"; exit 1; }
+      - name: suite
+        env:
+          EVERGREEN_HOME: ${{ runner.temp }}/evergreen-home
+        run: python scripts/test_evergreen.py
+      - name: pack
+        env:
+          EVERGREEN_HOME: ${{ runner.temp }}/evergreen-home
+        run: python scripts/evergreen.py pack --share --out dist
+      - name: publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "Evergreen ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --notes "Install: save \`evergreen-${GITHUB_REF_NAME#v}-share.zip\` to a folder and paste the INSTALL-PROMPT into Claude Code, or clone the repository and paste \`templates/INSTALL-PROMPT-GIT.txt\`. Cowork: install \`evergreen-share.plugin\`. Reasoned changes: CHANGELOG.md."
