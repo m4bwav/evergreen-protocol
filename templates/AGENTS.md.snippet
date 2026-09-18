@@ -13,3 +13,4 @@ This repo follows the Evergreen Protocol: skills and docs refresh themselves fro
 - Codemap for this repo: `docs/CODEMAP.md` (if present) or `$EVERGREEN_HOME/maps/<slug>/CODEMAP.md`. It may be stale, incomplete, or confused: verify load-bearing claims in code, check drift against the stamped sha, and update the map with what you learn.
 - New skills are evergreen by default (scaffold with `evergreen/scripts/evergreen.py init`), unless asked for a plain skill.
 - Before finishing a substantial task, ask: did I learn something a future session would need? If yes, record it.
+- Link markdown together with relative markdown links: every folder of docs has an index (`README.md` or `INDEX.md`) that links its files, and a document links the documents it builds on. People read these in Obsidian, agents follow the links; both need the edges. No wikilinks in the repo.

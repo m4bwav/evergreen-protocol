@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260918-2 · 2026-09-18 · Protocol 1.8: documents link each other (index per folder, Related lines, relative markdown links, no wikilinks); version 0.8.2
+- because: the owner's request (agent-written markdown should read as a linked graph for people in Obsidian and for later agents, if only through an index file per folder); no script change
+- files: protocol/PROTOCOL.md §9 (new paragraph; version line), templates/AGENTS.md.snippet (one bullet), .claude-plugin/plugin.json (0.8.2)
+- §2 already required companions to link each other; §9 now extends the rule to every markdown folder (an index that links its files) and to cross-document references (relative markdown links, a `Related:` line for dependencies), and says why wikilinks stay out of shared repositories.
+
 ### C-20260918-1 · 2026-09-18 · Provenance tiebreaker: prefer skills written by the latest frontier models at their highest reasoning setting, when readable or inferable
 - because: the owner's request; consistent with R-20260917-2 (quality signals beyond popularity) and with the evidence-first rule, which this never outranks
 - files: protocol/PROTOCOL.md §4 (Ranking the tooling track), templates/RESEARCH.md.template (search plan line), agents/evergreen-researcher.md

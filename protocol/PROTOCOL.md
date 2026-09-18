@@ -1,6 +1,6 @@
 # The Evergreen Protocol
 
-Version 1.7 (2026-09-17). This is the paradigm every evergreen unit follows. Skills, knowledge docs, codemaps, and profiles all point here: by relative link when they live with the plugin, by the pointer `protocol: "plugin"` (resolved to the one installed plugin) when they live elsewhere, or through a condensed `MAINTENANCE.md` copy only when they travel to machines with no plugin. Read this once per session when you first touch an evergreen unit; after that, the unit's own files tell you what to do.
+Version 1.8 (2026-09-18). This is the paradigm every evergreen unit follows. Skills, knowledge docs, codemaps, and profiles all point here: by relative link when they live with the plugin, by the pointer `protocol: "plugin"` (resolved to the one installed plugin) when they live elsewhere, or through a condensed `MAINTENANCE.md` copy only when they travel to machines with no plugin. Read this once per session when you first touch an evergreen unit; after that, the unit's own files tell you what to do.
 
 Companion specs: [INTERVALS.md](INTERVALS.md) (refresh cadence), [LEARNINGS-FORMAT.md](LEARNINGS-FORMAT.md) (how lessons are written and pruned), [CODEMAP-FORMAT.md](CODEMAP-FORMAT.md) (repo maps), [TESTING.md](TESTING.md) (how a unit is proven and tuned), [PORTABILITY.md](PORTABILITY.md) (environments and install modes). Evidence for these rules: [../RESEARCH.md](../RESEARCH.md).
 
@@ -132,6 +132,8 @@ When answering questions about a codebase or system that you will plausibly see 
 ## 9. Tone and hygiene
 
 Write for the next reader, who may be a different model in a different tool with no chat history. Plain markdown, no tool-specific syntax in shared files, relative links, no absolute paths except in `evergreen.json` and the environment profile. Imperative voice in instructions. No em dashes. Say what is uncertain.
+
+Link documents together. Markdown written by agents is read by people as well, often in a graph-aware editor (Obsidian, Foam, Logseq) where links become backlinks and a navigable graph, and it is read by later agents that follow links to load only what a task needs. So a unit's companions link the main file and each other (§2, enforced by `links`), every folder of markdown a reader might enter has an index file that links each document in it (`README.md` or `INDEX.md`), a document that builds on another links it (a `Related:` line at the end is enough), and a reference to another document is a relative markdown link, never a bare filename in backticks. Use relative markdown links only: wikilinks (`[[...]]`) render in those editors but nowhere else, so they do not belong in a shared repository. Keep basenames distinct within a unit so a link is never ambiguous.
 
 ## 10. One public trunk, many clones
 
