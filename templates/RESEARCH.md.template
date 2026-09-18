@@ -26,6 +26,14 @@ Tooling (skills, plugins, MCP servers, scripts, knowledge graphs built for this 
 - `path:SKILL.md "<topic>"` on GitHub code search, sorted by recently updated; `npx skills find "<topic>"` and skills.sh for install counts
 - `https://registry.modelcontextprotocol.io/v0/servers?search=<topic>`; fallback `"<topic>" mcp server site:glama.ai OR site:pulsemcp.com`
 - `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`
+- Most used: skills.sh weekly and 24-hour installs for `<topic>` (never all-time; exclude meta and installer skills); `anthropics/claude-plugins-official` and `claude-plugins-community` searched for `<topic>` (record the tier)
+- Practitioner test on every candidate: commit in the last 90 days, issues answered, no bundled `*.test.*` or `conftest.py` from an unknown author, author has other work in the area, ships `evals/` or paired results; `path:SKILL.md "<topic>" evals OR benchmark`
+- Supersession sweep: `"<topic>" skill deprecated OR superseded OR archived <year>`; archive flag on every tool already listed here
+
+Most discussed and the converged thinking (comment volume over points; what the most-used and most-discussed sources agree on becomes a claim in Current understanding):
+
+- `hn.algolia.com/api/v1/search_by_date?query=<topic>` and `site:reddit.com/r/ClaudeAI OR r/ClaudeCode "<topic>" <month>`
+- OpenAlex `works?search=<topic> agent&sort=cited_by_count:desc&filter=from_publication_date:<last check>`; the two most-cited through Semantic Scholar
 
 Practice (how others use AI agents on this goal, and everything in between):
 

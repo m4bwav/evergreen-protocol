@@ -13,7 +13,7 @@ This repo is the evergreen plugin: self-maintaining, self-proving skills and kno
 - Plain markdown, relative links, no tool-specific syntax in shared files. Imperative voice in skill bodies. No em dashes. Keep SKILL.md bodies under 200 lines and put detail in `protocol/` or `references/`.
 - Delta edits only. Never regenerate a RESEARCH, CHANGELOG, or LEARNINGS file.
 - Every change to this repo gets a `C-` entry in `CHANGELOG.md` with `because:`.
-- This repo is the trunk (protocol 1.6, `PROTOCOL.md` §10). Log entries, state and claim edits may go straight to `master` from a maintainer's clone (`python scripts/evergreen.py publish`); scripts, hooks and protocol changes go through a pull request (`publish --branch`). Never force-push; never rewrite `master`.
+- This repo is the trunk (protocol 1.7, `PROTOCOL.md` §10). Log entries, state and claim edits may go straight to `master` from a maintainer's clone (`python scripts/evergreen.py publish`); scripts, hooks and protocol changes go through a pull request (`publish --branch`). Never force-push; never rewrite `master`.
 
 ## Boundaries
 
