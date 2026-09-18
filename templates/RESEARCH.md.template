@@ -28,6 +28,7 @@ Tooling (skills, plugins, MCP servers, scripts, knowledge graphs built for this 
 - `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`
 - Most used: skills.sh weekly and 24-hour installs for `<topic>` (never all-time; exclude meta and installer skills); `anthropics/claude-plugins-official` and `claude-plugins-community` searched for `<topic>` (record the tier)
 - Practitioner test on every candidate: commit in the last 90 days, issues answered, no bundled `*.test.*` or `conftest.py` from an unknown author, author has other work in the area, ships `evals/` or paired results; `path:SKILL.md "<topic>" evals OR benchmark`
+- Provenance tiebreaker: which model and reasoning setting wrote each candidate (`evals.json` / frontmatter `model`, README or changelog credit, commit messages); prefer the latest frontier model at its highest reasoning setting, read over inferred
 - Supersession sweep: `"<topic>" skill deprecated OR superseded OR archived <year>`; archive flag on every tool already listed here
 
 Most discussed and the converged thinking (comment volume over points; what the most-used and most-discussed sources agree on becomes a claim in Current understanding):

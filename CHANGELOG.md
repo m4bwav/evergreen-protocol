@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260918-1 · 2026-09-18 · Provenance tiebreaker: prefer skills written by the latest frontier models at their highest reasoning setting, when readable or inferable
+- because: the owner's request; consistent with R-20260917-2 (quality signals beyond popularity) and with the evidence-first rule, which this never outranks
+- files: protocol/PROTOCOL.md §4 (Ranking the tooling track), templates/RESEARCH.md.template (search plan line), agents/evergreen-researcher.md
+- Where to read it: `model` or `reasoning` fields in evals.json, eval_metadata.json or frontmatter; README or changelog credits; commit messages and pull requests; TESTS.md harness entries. Read beats inferred; a style-only inference is a guess.
+
 ### C-20260917-5 · 2026-09-17 · Protocol 1.7: a refresh answers five questions about the area (newest, most used, most discussed, converged thinking, practitioner-built) and ranks tooling by tier, velocity and a quality gate; version 0.8.1
 - because: the owner's question ("does the protocol research the latest in a skill's area and the latest skills of that type; it should also look at the most popularly used thinking and skills, the most discussed thinking, and skills created for work in the area"); R-20260917-2
 - files: protocol/PROTOCOL.md §4 (the five questions; "Ranking the tooling track": tiered sources with the tier recorded, velocity not totals with meta-skills excluded, the practitioner quality gate, paired-eval preference with one to three adopts per topic, the supersession sweep), templates/RESEARCH.md.template (new queries: most used, practitioner test, supersession, most discussed and converged thinking), agents/evergreen-researcher.md, skills/evergreen-refresh/SKILL.md
