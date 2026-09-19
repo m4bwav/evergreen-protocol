@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260918-3 · 2026-09-18 · Protocol 1.9: indexes first, with a shape, a budget, tiering, an exclusion list, an optional single back-link and a way to prove they pay; version 0.8.3
+- because: the owner's request (indexes that link most docs and are a net positive for agents and people alike, without costing agent performance; back-links only where they earn their place); R-20260918-2
+- files: protocol/PROTOCOL.md §9 (the linking paragraph became seven rules), templates/AGENTS.md.snippet, RESEARCH.md (R-20260918-2), .claude-plugin/plugin.json (0.8.3)
+- The 1.8 text asked for an index per folder and links between documents; 1.9 says what an index line looks like (`[title](path): when to read it`), how big an index may be (about 200 lines, read on demand, never pasted into the always-on file), when a folder index is redundant, what to exclude, that a back-link to the index is optional and at most one line, and how to test an index (paired runs, median of five, first correct open within three tool calls).
+
 ### C-20260918-2 · 2026-09-18 · Protocol 1.8: documents link each other (index per folder, Related lines, relative markdown links, no wikilinks); version 0.8.2
 - because: the owner's request (agent-written markdown should read as a linked graph for people in Obsidian and for later agents, if only through an index file per folder); no script change
 - files: protocol/PROTOCOL.md §9 (new paragraph; version line), templates/AGENTS.md.snippet (one bullet), .claude-plugin/plugin.json (0.8.2)
