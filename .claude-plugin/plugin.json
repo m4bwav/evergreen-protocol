@@ -1,6 +1,6 @@
 {
   "name": "evergreen",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Self-maintaining, self-proving skills and knowledge: adaptive web research on four tracks (the subject, the skills, plugins, MCP servers and knowledge graphs built for it, how others use agents on the same goal, and how they test that the job was done), never-teach-twice learnings capture, plugin-owned codemaps, a portable AI-preferences profile, and an eval suite per skill (trigger, action, outcome, decoys, baseline) that passes on evidence outside the transcript, with a bounded tuning loop that researches the subject's own testing when a skill fails. Converts existing skills and makes new ones evergreen by default. Lives in one public git repository (https://github.com/m4bwav/evergreen-protocol): every install is a clone that pulls to stay current and, only if its owner said yes at install, sends improvements to the protocol, skills and scripts back as pull requests it opens itself (log entries go straight to master from a maintainer's clone), with email as the fallback route.",
   "author": {
     "name": "Mark Rogers"

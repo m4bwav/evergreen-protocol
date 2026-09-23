@@ -22,6 +22,10 @@ model is synthetic: real topics are burstier and their changes are not independe
 comparison between schedules, not as a forecast for any unit.
 
 Usage: python scripts/bench_intervals.py [--seed N] [--days 730] [--units 25] [--use-every 1] [--json]
+                                        [--rule major_div=4,change_div=2,quiet_mul=1.5]
+
+`--rule` overrides the step sizes in evergreen.RULE for the run (the example above is the protocol 1.10 rule; the
+1.11 steps are the default), so a candidate rule is scored by the same code path as the shipped one.
 """
 from __future__ import annotations
 
@@ -186,7 +190,7 @@ def run(seed: int = 1, days: float = 730, units: int = 25, use_every: float = 1.
         per_class.append(row)
     summary = {p: {k: _mean([r["policies"][p][k] for r in per_class if r["policies"][p][k] is not None])
                    for k in ("checks_per_year", "delay_all", "delay_material", "stale_share")} for p in POLICIES}
-    return {"seed": seed, "days": days, "units_per_class": units, "use_every": use_every,
+    return {"seed": seed, "days": days, "units_per_class": units, "use_every": use_every, "rule": dict(eg.RULE),
             "mix": [list(x) for x in MIX], "classes": per_class, "summary": summary}
 
 
@@ -200,8 +204,9 @@ def _f(x: float | None, digits: int = 1) -> str:
 
 def render(res: dict) -> str:
     lines = [f"Refresh-schedule benchmark: seed {res['seed']}, {res['days']:g} days, {res['units_per_class']} synthetic units "
-             f"per class, {len(res['classes'])} classes, one use every {res['use_every']:g} day(s). Synthetic change model; "
-             "means are per class, then averaged over classes.", "",
+             f"per class, {len(res['classes'])} classes, one use every {res['use_every']:g} day(s); rule steps "
+             f"/{res['rule']['major_div']:g} on a major change, /{res['rule']['change_div']:g} on a change, "
+             f"x{res['rule']['quiet_mul']:g} when quiet. Synthetic change model; means are per class, then averaged over classes.", "",
              "| Policy | Checks per year | Mean delay, all changes (days) | Mean delay, material changes (days) | Share of time holding a stale material claim |",
              "|---|---|---|---|---|"]
     for p in POLICIES:
@@ -222,7 +227,13 @@ def main(argv=None) -> int:
     ap.add_argument("--units", type=int, default=25, help="synthetic units per class (default 25)")
     ap.add_argument("--use-every", type=float, default=1.0, help="days between uses of a verify-at-use unit (default 1)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--rule", help="override the step sizes, e.g. major_div=4,change_div=2,quiet_mul=1.5 (the protocol 1.10 steps)")
     a = ap.parse_args(argv)
+    for kv in (a.rule.split(",") if a.rule else []):
+        k, _, v = kv.partition("=")
+        if k.strip() not in eg.RULE or not v:
+            ap.error(f"--rule takes name=value pairs; names: {', '.join(eg.RULE)}")
+        eg.RULE[k.strip()] = float(v)
     for s in (sys.stdout, sys.stderr):
         try:
             s.reconfigure(encoding="utf-8", errors="replace")

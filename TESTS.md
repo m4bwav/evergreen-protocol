@@ -8,6 +8,23 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20260923-4 · 2026-09-23 · scripts/test_evergreen.py after the 1.11 steps; scripts/bench_intervals.py sweep of twenty candidate step sizes · DESKTOP-7KS2S6E · 76/76
+- Self-test: 76 cases pass after the interval-rule cases were rewritten for the new steps (quiet walk 30 → 37.5 → 46.88 → 58.6 → 73.25 → 90; a shake-up halves and a change cuts by a third; promotion on one major change only below the floor; live 6 h → 7.5 h; jitter band around 37.5). `--rule major_div=4,change_div=2,quiet_mul=1.5` reproduces T-20260923-1's table to the decimal.
+- Benchmark, seeds 1 to 3, 730 days, 25 units per class; checks per year summed over the seven middle classes (7d, 14d, 30d, 60d, 120d, shift, burst), the share of time holding a stale material claim and the days to see a material change averaged over them, and the gap to even spacing at the same count:
+
+| Steps (major, change, quiet) | Checks | Stale | Delay | Gap |
+|---|---|---|---|---|
+| 1.10: ÷4, ÷2, ×1.5 | 171 | 16.9% | 20.2 d | 3.7 pts |
+| 1.11: ÷2, ÷1.5, ×1.25 | 177 | 15.6% | 18.4 d | 2.4 pts |
+| ÷2, ÷1.5, ×1.3 | 161 | 16.6% | 19.5 d | 2.2 pts |
+| ÷3, ÷1.5, ×1.25 | 185 | 15.4% | 18.2 d | 2.5 pts |
+| ÷2, ÷2, ×1.25 | 200 | 14.7% | 17.4 d | 2.8 pts |
+| ÷4, ÷2, ×1.25 | 226 | 13.1% | 15.6 d | 3.0 pts |
+| ÷4, ÷2, ×1.5 without immediate promotion | 161 | 17.6% | 21.3 d | 3.2 pts |
+
+- Seeds 4 to 6 (730 days) and seeds 1 to 3 (3,650 days) rank the same: 1.11 costs 5 and 6 percent more than 1.10 for 15.5 and 15.2 percent stale against 17.1 and 17.0, and 18.3 and 17.5 days against 20.7 and 19.4. The change-rate anchor (interval = c over the material-change rate of the last eight checks) at c = 0.35, 0.5, 0.7 and 1.0: 29.0, 20.7, 16.5 and 13.4 checks a year over all nine classes for 21.9, 26.4, 30.8 and 34.5 percent stale, each worse than even spacing at its own count by 4 points or more. Reading: RESEARCH.md R-20260923-12.
+- led to: R-20260923-12, C-20260923-17
+
 ### T-20260923-3 · 2026-09-23 · claude plugin eval 2.1.280 on cases written by `evergreen.py eval-export`, one run each; trigger-2 rerun · owner-pc · 3/3
 - `eval-export . --out evals-export-probe` wrote all 12 cases of this plugin's suite; through `--eval-dir evals-export-probe`, the exported trigger-4 fired evergreen-learn (its `input_match` is the exact pattern the docs give for a Skill call, and it matched) and the exported decoy-2 kept every evergreen skill quiet with and without the plugin. The probe folder was deleted afterwards; the hand-tuned `evals/cases/` stay as they are.
 - trigger-2 (evergreen-test) rerun after its Step 3 named `eval-export`: 3 of 3 with the plugin, 0 of 3 without.

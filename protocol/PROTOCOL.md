@@ -1,6 +1,6 @@
 # The Evergreen Protocol
 
-Version 1.10 (2026-09-23). This is the paradigm every evergreen unit follows. Skills, knowledge docs, codemaps, and profiles all point here: by relative link when they live with the plugin, by the pointer `protocol: "plugin"` (resolved to the one installed plugin) when they live elsewhere, or through a condensed `MAINTENANCE.md` copy only when they travel to machines with no plugin. Read this once per session when you first touch an evergreen unit; after that, the unit's own files tell you what to do.
+Version 1.11 (2026-09-23). This is the paradigm every evergreen unit follows. Skills, knowledge docs, codemaps, and profiles all point here: by relative link when they live with the plugin, by the pointer `protocol: "plugin"` (resolved to the one installed plugin) when they live elsewhere, or through a condensed `MAINTENANCE.md` copy only when they travel to machines with no plugin. Read this once per session when you first touch an evergreen unit; after that, the unit's own files tell you what to do.
 
 Companion specs: [INTERVALS.md](INTERVALS.md) (refresh cadence), [LEARNINGS-FORMAT.md](LEARNINGS-FORMAT.md) (how lessons are written and pruned), [CODEMAP-FORMAT.md](CODEMAP-FORMAT.md) (repo maps), [TESTING.md](TESTING.md) (how a unit is proven and tuned), [PORTABILITY.md](PORTABILITY.md) (environments and install modes). Evidence for these rules: [../RESEARCH.md](../RESEARCH.md).
 

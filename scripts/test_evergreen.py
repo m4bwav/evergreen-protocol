@@ -49,14 +49,22 @@ def run(st, ms, now=NOW):
 class IntervalRule(unittest.TestCase):
     def test_quiet_walks_to_cap_and_settles(self):
         st, seen = run(state("moderate", 30), [0, 0, 0, 0, 0])
-        self.assertEqual(seen, [45, 67.5, 90, 90, 90])
+        self.assertEqual(seen, [37.5, 46.88, 58.6, 73.25, 90])
 
-    def test_shakeup_halves_or_quarters(self):
+    def test_shakeup_halves_and_a_change_cuts_a_third(self):
         st = state("moderate", 90)
         st = eg.compute_next(st, 0.7, NOW, jitter=False)
-        self.assertEqual(st["interval_days"], 22.5)
+        self.assertEqual(st["interval_days"], 45)
+        self.assertIn("major change: interval / 2", st["report"])
         st = eg.compute_next(st, 0.4, NOW, jitter=False)
-        self.assertEqual(st["interval_days"], 14)  # clamped at min
+        self.assertEqual(st["interval_days"], 30)
+        self.assertIn("change: interval / 1.5", st["report"])
+        for _ in range(2):
+            st = eg.compute_next(st, 0.4, NOW, jitter=False)
+        self.assertEqual(st["interval_days"], 14)  # 20, then 13.3 -> clamped at the floor, pinned once
+        self.assertEqual(st["tier"], "moderate")
+        st = eg.compute_next(st, 0.4, NOW, jitter=False)  # pinned twice -> promoted
+        self.assertEqual((st["tier"], st["interval_days"]), ("fast", 3))
 
     def test_minor_churn_holds(self):
         st = eg.compute_next(state("fast", 14), 0.2, NOW, jitter=False)
@@ -79,8 +87,8 @@ class IntervalRule(unittest.TestCase):
     def test_next_due_and_history(self):
         st = eg.compute_next(state("fast", 14), 0.0, NOW, jitter=False)
         self.assertEqual(st["last_checked"], "2026-09-01")
-        self.assertEqual(st["next_due"], "2026-09-22")
-        self.assertEqual(st["history"][-1]["interval_after"], 21)
+        self.assertEqual(st["next_due"], "2026-09-19")  # 14 x 1.25 = 17.5 days, to the day
+        self.assertEqual(st["history"][-1]["interval_after"], 17.5)
 
     def test_event_caps_next_due(self):
         st = state("slow", 120)
@@ -102,16 +110,20 @@ class IntervalRule(unittest.TestCase):
         self.assertEqual(st["interval_days"], 3)
         self.assertEqual(st["streak"]["pinned_min"], 0)
 
-    def test_major_change_promotes_immediately_out_of_slow(self):
+    def test_major_change_promotes_only_when_the_halved_interval_falls_below_the_min(self):
         st = eg.compute_next(state("slow", 120), 0.9, NOW, jitter=False)
-        self.assertEqual(st["tier"], "moderate")
-        self.assertEqual(st["interval_days"], 30)  # 120/4, inside moderate's bounds
+        self.assertEqual(st["tier"], "slow")
+        self.assertEqual(st["interval_days"], 60)  # 120/2 is slow's floor: pinned there, not promoted
+        self.assertEqual(st["streak"]["pinned_min"], 1)  # a second material change promotes (see below)
         st = eg.compute_next(state("glacial", 365), 0.9, NOW, jitter=False)
         self.assertEqual(st["tier"], "slow")
-        self.assertEqual(st["interval_days"], 91.25)
+        self.assertEqual(st["interval_days"], 182.5)  # 365/2 is below glacial's floor of 270
         st = eg.compute_next(state("moderate", 30), 0.9, NOW, jitter=False)
+        self.assertEqual(st["tier"], "moderate")
+        self.assertEqual(st["interval_days"], 15)
+        st = eg.compute_next(state("moderate", 20), 0.9, NOW, jitter=False)
         self.assertEqual(st["tier"], "fast")
-        self.assertEqual(st["interval_days"], 7.5)
+        self.assertEqual(st["interval_days"], 10)  # 20/2 is below moderate's floor of 14
 
     def test_custom_bounds_respected_and_dropped_on_migration(self):
         st = state("moderate", 30, bounds_days={"min": 20, "max": 60})
@@ -159,7 +171,7 @@ class IntervalRule(unittest.TestCase):
 
     def test_live_uses_hours(self):
         st = eg.compute_next(state("live", 0.25), 0.0, NOW, jitter=False)
-        self.assertEqual(st["interval_days"], 0.38)
+        self.assertEqual(st["interval_days"], 0.31)  # 6 h x 1.25
         self.assertIn("T", st["next_due"])
 
     def test_jitter_stays_within_band(self):
@@ -167,8 +179,8 @@ class IntervalRule(unittest.TestCase):
             st = eg.compute_next(state("moderate", 30), 0.0, NOW, jitter=True)
             due = eg.parse_when(st["next_due"])
             days = (due - NOW).total_seconds() / 86400
-            self.assertTrue(45 * 0.85 - 1 <= days <= 45 * 1.15 + 1)
-            self.assertEqual(st["interval_days"], 45)  # stored interval unjittered
+            self.assertTrue(37.5 * 0.85 - 1 <= days <= 37.5 * 1.15 + 1)
+            self.assertEqual(st["interval_days"], 37.5)  # stored interval unjittered
 
 
 class Freshness(unittest.TestCase):
@@ -290,7 +302,7 @@ class Scaffold(unittest.TestCase):
         eg.main(["init", str(d), "--name", "chk", "--topic", "t", "--tier", "fast", "--standalone"])
         eg.main(["checked", str(d), "--m", "0.7", "--note", "big change", "--no-jitter"])
         _, st = eg.load_state(d)
-        self.assertEqual(st["interval_days"], 3.5)
+        self.assertEqual(st["interval_days"], 7)  # fast starts at 14; a major change halves it
         self.assertEqual(st["history"][-1]["note"], "big change")
         self.assertEqual(st["counts"]["research"], 1)
 

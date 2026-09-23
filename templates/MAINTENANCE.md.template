@@ -28,7 +28,7 @@ Failed searches: log `m: null` in history, leave `next_due` alone, retry next us
 
 Tiers (min / max / start days): live 0.25/3/1 · fast 3/21/14 · moderate 14/90/30 · slow 60/365/120 · glacial 270/900/365 · code 7/90/30 · none (no research).
 
-With current interval I and magnitude m: contradiction set → I = min; m ≥ 0.6 → I ÷ 4 (if that lands below the tier's min and the tier is moderate or slower, move one tier faster now and keep I = max(new min, I ÷ 4)); 0.3 ≤ m < 0.6 → I ÷ 2; 0 < m < 0.3 → unchanged; m = 0 → I × 1.5. Clamp to tier bounds; fractions of a day are fine. Set `last_checked` to today; `next_due` = today + I, capped by any future event in `events` (event date + settle_days). Clear `contradiction`; append `{date, m, interval_after, note}` to `history`.
+With current interval I and magnitude m: contradiction set → I = min; m ≥ 0.6 → I ÷ 2 (if that lands below the tier's min and the tier is moderate or slower, move one tier faster now and keep I = max(new min, I ÷ 2)); 0.3 ≤ m < 0.6 → I ÷ 1.5; 0 < m < 0.3 → unchanged; m = 0 → I × 1.25. Clamp to tier bounds; fractions of a day are fine. Set `last_checked` to today; `next_due` = today + I, capped by any future event in `events` (event date + settle_days). Clear `contradiction`; append `{date, m, interval_after, note}` to `history`.
 
 Migration: pinned at min for 2 consecutive checks with m ≥ 0.3 → one tier faster at that tier's min (fast pinned 3 times → `verify_at_use: true`, clear `next_due`, re-check the due `volatile_claims` at each use). Pinned at max for 3 consecutive quiet checks → one tier slower, I unchanged. `verify_at_use` turns off after 2 quiet use-time checks (back to fast, 14 days). Custom bounds are dropped on migration; code and none never migrate.
 
