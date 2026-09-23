@@ -6,7 +6,7 @@ Principles: research beats recall on anything time-sensitive (model knowledge is
 
 ## Step 0: freshness (every use)
 
-Read `evergreen.json`. If `contradiction` is set or today ≥ `next_due`: say so in one line, do the task, then refresh (below) in the same session. If `verify_at_use` is true: re-check `volatile_claims` with one or two searches before relying on them. If `tests.failing` is non-empty: say so in one line and run the tuning loop (below) after the task. Below the due date, spend nothing more.
+Read `evergreen.json`. If `contradiction` is set or today ≥ `next_due`: say so in one line, do the task, then refresh (below) in the same session. If `verify_at_use` is true: re-check the due `volatile_claims` before relying on them, one search each (a plain string is always due; an object `{"claim", "checked", "recheck_days"}` is due once `checked` plus `recheck_days`, default the unit's interval, is today or earlier), then set their `checked` to today. If `tests.failing` is non-empty: say so in one line and run the tuning loop (below) after the task. Below the due date, spend nothing more.
 
 ## Refresh
 
@@ -16,11 +16,11 @@ Read `evergreen.json`. If `contradiction` is set or today ≥ `next_due`: say so
    - Tooling: what the AI ecosystem built for this subject. `path:SKILL.md "<topic>"` on GitHub sorted by recent activity; skills.sh or `npx skills find "<topic>"` for install counts; `registry.modelcontextprotocol.io/v0/servers?search=<topic>`; `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`. Rank by installs, then stars plus a recent commit; SEO listicles count for nothing.
    - Practice: how others use agents on this goal. `"how I use" OR "my workflow" "<topic>" "claude code" OR codex OR cursor <year>`; `site:arxiv.org "<topic>" agent "case study" OR telemetry <year>`; hn.algolia.com sorted by date.
    - Testing: how work on this subject is verified and how skills for it are tuned. `"<topic>" verify OR validate OR checker agent <year>`; `path:SKILL.md "<topic>" test OR eval`; `site:arxiv.org "<topic>" agent evaluation <year>`. A better check becomes a case in `evals/evals.json`.
-3. For each finding decide: new? changes a claim in {{MAIN}}? Magnitude per finding: 0 nothing; 0.1 to 0.29 minor (examples, versions, wording); 0.3 to 0.59 a recommendation or step changed, or a comparable tool worth pointing to; 0.6 to 1.0 a core claim is wrong or superseded, or a well-used maintained tool now does what this unit's procedure does. The check's `m` is the largest single finding, whichever track. Tooling findings get a response: adopt, point, or note. Never install anything without the user's yes.
+3. For each finding decide: new, or already in RESEARCH.md (search it for what the finding says, not only for its title)? Changes a claim in {{MAIN}}? Magnitude per finding: 0 nothing; 0.1 to 0.29 minor (examples, versions, wording); 0.3 to 0.59 a recommendation or step changed, or a comparable tool worth pointing to; 0.6 to 1.0 a core claim is wrong or superseded, or a well-used maintained tool now does what this unit's procedure does. The check's `m` is the largest single finding, whichever track. Tooling findings get a response: adopt, point, or note. Never install anything without the user's yes.
 4. Append `R-YYYYMMDD-n` entries (summary, track, sources, magnitude, `applied:`). Edit Current understanding in place. Update Open questions and the Search plan, keeping its four tracks.
 5. Apply changes to {{MAIN}} in place; log each as `C-YYYYMMDD-n` with `because: R-...`; back-fill `applied:` on the finding.
 6. If {{MAIN}} changed and the unit is a skill, re-run its tests (below) before recording the check.
-7. Update `evergreen.json` with the interval rule below. Report in at most three lines.
+7. Update `evergreen.json` with the interval rule below; the history note says what the research cost (searches, fetches, tool calls). Report in at most three lines.
 
 Failed searches: log `m: null` in history, leave `next_due` alone, retry next use.
 
@@ -30,11 +30,11 @@ Tiers (min / max / start days): live 0.25/3/1 · fast 3/21/14 · moderate 14/90/
 
 With current interval I and magnitude m: contradiction set → I = min; m ≥ 0.6 → I ÷ 4 (if that lands below the tier's min and the tier is moderate or slower, move one tier faster now and keep I = max(new min, I ÷ 4)); 0.3 ≤ m < 0.6 → I ÷ 2; 0 < m < 0.3 → unchanged; m = 0 → I × 1.5. Clamp to tier bounds; fractions of a day are fine. Set `last_checked` to today; `next_due` = today + I, capped by any future event in `events` (event date + settle_days). Clear `contradiction`; append `{date, m, interval_after, note}` to `history`.
 
-Migration: pinned at min for 2 consecutive checks with m ≥ 0.3 → one tier faster at that tier's min (fast pinned 3 times → `verify_at_use: true`, clear `next_due`, re-check `volatile_claims` at every use). Pinned at max for 3 consecutive quiet checks → one tier slower, I unchanged. `verify_at_use` turns off after 2 quiet use-time checks (back to fast, 14 days). Custom bounds are dropped on migration; code and none never migrate.
+Migration: pinned at min for 2 consecutive checks with m ≥ 0.3 → one tier faster at that tier's min (fast pinned 3 times → `verify_at_use: true`, clear `next_due`, re-check the due `volatile_claims` at each use). Pinned at max for 3 consecutive quiet checks → one tier slower, I unchanged. `verify_at_use` turns off after 2 quiet use-time checks (back to fast, 14 days). Custom bounds are dropped on migration; code and none never migrate.
 
 ## Learnings
 
-Write one the moment any of these happens: the user corrects you; the same error twice; a workaround found; an environment fact discovered; a stated preference. Gate first against existing entries: Add, Update (extend trigger, bump counters), Delete (retire to LEARNINGS-ARCHIVE.md with reason), or None.
+Write one the moment any of these happens: the user corrects you; the same error twice; a workaround found; an environment fact discovered; a stated preference. Gate first against existing entries, searched by meaning and archives included: Add, Update (extend trigger, bump counters), Delete (retire to LEARNINGS-ARCHIVE.md with reason), or None.
 
 ```
 ### L-001 · date · one-line lesson
@@ -56,7 +56,7 @@ Tuning loop, on a failed case or a failure in use, at most three iterations: rep
 
 ## Links and budgets
 
-Each companion names the others. Changes cite the findings, learnings and test runs that caused them; findings record what they produced; runs record what they led to; learnings cite their evidence. Cite section headings, not line numbers. Budgets: {{MAIN}} under 200 lines (hard cap 500); Current understanding under 60; active learnings under 200; TESTS.md under 150. Archive overflow to `*-ARCHIVE.md` files with a pointer.
+Each companion names the others. A document that builds on, contradicts or supersedes another ends with a typed `Related:` line of relative markdown links, `Related: supersedes [title](path); builds on [title](path); see also [title](path)` (labels: supersedes, superseded by, contradicts, builds on, see also; an unlabelled link counts as see also). Changes cite the findings, learnings and test runs that caused them; findings record what they produced; runs record what they led to; learnings cite their evidence. Cite section headings, not line numbers. Budgets: {{MAIN}} under 200 lines (hard cap 500); Current understanding under 60; active learnings under 200; TESTS.md under 150. Archive overflow to `*-ARCHIVE.md` files with a pointer.
 
 ## Installed copies
 

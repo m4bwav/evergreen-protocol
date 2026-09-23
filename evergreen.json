@@ -14,20 +14,35 @@
   "topic": "self-maintaining agent skills and memory: skill libraries, memory consolidation, refresh scheduling, cross-agent instruction standards, codemaps, Claude plugin/skill spec; plus publishing and merging the plugin's own updates (agent hooks, git push and pull-request flow, mail fallback, patch tooling)",
   "tier": "fast",
   "interval_days": 3,
-  "last_checked": "2026-09-09",
+  "last_checked": "2026-09-23",
   "next_due": null,
   "verify_at_use": true,
   "volatile_claims": [
-    "claude plugin eval is absent from code.claude.com (plugins-reference, cli-reference, llms.txt); if it returns, restore TESTING.md 6 row order and re-verify its flags (R-20260910-1)",
-    "Claude Code changelog newest entry is 2.1.267 (2026-09-09); no .agents/skills/ or native AGENTS.md support; SessionEnd budget 1.5 s default, raisable to 60 s by per-hook \timeout (R-20260910-2, R-20260910-3)",
-    "SKILL.md frontmatter per code.claude.com/docs/en/skills is 20 fields with no \tags; 1,536-char cap covers description plus when_to_use (R-20260910-3)",
-    "Cowork runs no hooks: anthropics/claude-code#40495 still open, #63360 closed as duplicate (R-20260910-2)"
+    {
+      "claim": "claude plugin eval is documented at code.claude.com/docs/en/plugin-evals (Claude Code 2.1.269 and later) and listed in llms.txt; if it vanishes again, demote TESTING.md 6 row 1 and say so in place (R-20260923-7, L-017)",
+      "checked": "2026-09-23",
+      "recheck_days": 7
+    },
+    {
+      "claim": "Claude Code's newest release is 2.1.280 (2026-09-22); AGENTS.md is read natively since 2.1.277, only when no CLAUDE.md or CLAUDE.local.md exists; the skills reference still names only .claude/skills/, no .agents/skills/; SessionEnd hooks share a 1.5 s budget that a per-hook `timeout` raises up to 60 s (R-20260923-9, R-20260923-11)",
+      "checked": "2026-09-23"
+    },
+    {
+      "claim": "SKILL.md frontmatter per code.claude.com/docs/en/skills is 20 fields with no `tags`; the 1,536-character cap covers description plus when_to_use (R-20260910-3, R-20260923-11)",
+      "checked": "2026-09-23",
+      "recheck_days": 14
+    },
+    {
+      "claim": "Cowork runs no hooks: anthropics/claude-code#40495 still open, #63360 closed as its duplicate (R-20260910-2, R-20260923-11)",
+      "checked": "2026-09-23",
+      "recheck_days": 14
+    }
   ],
   "contradiction": null,
   "events": [],
   "streak": {
     "quiet": 0,
-    "pinned_min": 0,
+    "pinned_min": 1,
     "pinned_max": 0,
     "vau_quiet": 0
   },
@@ -67,21 +82,27 @@
       "m": 0.45,
       "interval_after": null,
       "note": "2026-09-10 four-track refresh: claude plugin eval withdrawn from docs (TESTING 6 demoted), SessionEnd budget adjustable to 60 s, SKILL.md frontmatter set (tags gone), Codex transcript_path resolved, skills-net-negative paper, skillsaw pointer; L-017"
+    },
+    {
+      "date": "2026-09-23",
+      "m": 0.5,
+      "interval_after": null,
+      "note": "2026-09-23 research-note refresh, protocol 1.10 / 0.9.0: claim-level recheck dates, typed Related lines, BM25 search, session-start upkeep flags, interval benchmark; plugin eval documented again, SkillsBench v4, ACE wording, AGENTS.md in 2.1.277; volatile claims re-checked and stamped; cost: searches 0 · fetches 7 · research passes behind the owner's note counted there"
     }
   ],
   "counts": {
-    "learnings": 19,
-    "changes": 20,
-    "research": 29,
-    "tests": 1
+    "learnings": 22,
+    "changes": 34,
+    "research": 40,
+    "tests": 2
   },
   "consolidate_every": 25,
   "tests": {
-    "last_run": "2026-09-13T09:37",
-    "harness": "claude plugin eval + evergreen-tester",
+    "last_run": "2026-09-23T10:52",
+    "harness": "claude plugin eval 2.1.280 (trigger and decoy cases)",
     "env": "owner-pc",
-    "cases": 10,
-    "passed": 10,
+    "cases": 9,
+    "passed": 9,
     "failed": 0,
     "failing": [],
     "last_failure": null,

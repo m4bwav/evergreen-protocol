@@ -8,7 +8,7 @@ In order: the `EVERGREEN_PLUGIN` environment variable; `registry.json` in the ev
 
 ## Step 0: freshness (every use, one read)
 
-Read `evergreen.json`. If `contradiction` is set or today ≥ `next_due`: say so in one line, do the user's task, then refresh in the same session with the plugin's `evergreen-refresh` skill. If `verify_at_use` is true, re-check `volatile_claims` with one or two searches first. If `tests.failing` is non-empty, say so in one line and run `evergreen-tune` after the task. Below the due date, spend nothing more.
+Read `evergreen.json`. If `contradiction` is set or today ≥ `next_due`: say so in one line, do the user's task, then refresh in the same session with the plugin's `evergreen-refresh` skill. If `verify_at_use` is true, re-check the due `volatile_claims` first, one search each (a plain string is always due; an object is due once its `checked` date plus `recheck_days`, default the unit's interval, is today or earlier), then set their `checked` to today (`evergreen.py claims <unit> --stamp due`). If `tests.failing` is non-empty, say so in one line and run `evergreen-tune` after the task. Below the due date, spend nothing more.
 
 ## If the plugin cannot be found
 

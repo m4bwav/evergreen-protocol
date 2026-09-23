@@ -577,6 +577,18 @@ class Scaffold(unittest.TestCase):
         st["tier"] = "none"
         self.assertIn("tune directly", eg.research_verdict(st, "no-op"))
 
+    def test_duplicate_entry_ids_after_a_union_merge_are_reported(self):
+        d = Path(self.tmp.name) / "dup"
+        eg.main(["init", str(d), "--name", "dup", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        _, st = eg.load_state(d)
+        self.assertEqual([p for p in eg.check_links(d, st) if "defined" in p and "times" in p], [])
+        tp = d / "TESTS.md"
+        run = "### T-20260913-1 · 2026-09-13 · manual · {env} · 1/1\n- led to: none\n\n"
+        tp.write_text(tp.read_text(encoding="utf-8").replace("## Runs\n\n", "## Runs\n\n" + run.format(env="a-fork-host") + run.format(env="owner-pc"), 1),
+                      encoding="utf-8")
+        self.assertIn("TESTS.md: T-20260913-1 is defined 2 times (a union merge kept both copies; renumber or remove one)",
+                      eg.check_links(d, st))
+
     def test_t_ids_are_checked_like_the_other_ids(self):
         self.assertEqual(eg.ID_RE.findall("fixed by T-20260904-1, see C-20260904-2 and other:T-20260904-3"), ["T-20260904-1", "C-20260904-2"])
         d = Path(self.tmp.name) / "tid"
@@ -686,6 +698,226 @@ class Scaffold(unittest.TestCase):
     def test_qualified_cross_unit_ids_are_not_checked(self):
         self.assertEqual(eg.ID_RE.findall("see other-unit:L-003 and R-20260901-1"), ["R-20260901-1"])
 
+    def test_state_and_scaffold_files_are_written_lf(self):
+        d = Path(self.tmp.name) / "lf"
+        eg.main(["init", str(d), "--name", "lf", "--topic", "t", "--standalone"])
+        capture(["checked", str(d), "--m", "0.2", "--no-notify"])
+        capture(["claims", str(d), "--add", "a claim"])
+        for f in ("evergreen.json", "SKILL.md", "RESEARCH.md", "CHANGELOG.md", "LEARNINGS.md", "MAINTENANCE.md", "TESTS.md", "evals/evals.json"):
+            self.assertNotIn(b"\r", (d / f).read_bytes(), f)  # Path.write_text would write CRLF on Windows (L-020)
+        self.assertNotIn(b"\r", eg.registry_path().read_bytes())
+
+    def test_volatile_claims_accept_both_shapes(self):
+        st = state("fast", 3, verify_at_use=True, next_due=None, volatile_claims=[
+            "a plain string claim",                                                  # legacy: due at every use
+            {"claim": "stamped yesterday, default recheck", "checked": "2026-08-31"},  # interval 3 days: not due yet
+            {"claim": "old stamp", "checked": "2026-08-20"},                         # 12 days ago: due
+            {"claim": "own cadence", "checked": "2026-08-20", "recheck_days": 30},    # due 2026-09-19: not due
+            {"claim": "no date yet"},                                                # never stamped: due
+        ])
+        self.assertEqual([eg.claim_due(c, st, NOW) for c in st["volatile_claims"]], [True, False, True, False, True])
+        self.assertEqual(eg.claims_due(st, NOW), 3)
+        fr = eg.freshness(st, NOW)
+        self.assertEqual((fr["status"], fr["claims_due"]), ("n/a", 3))
+        self.assertIn("claims due 3", eg.status_line(Path("."), st, fr))
+        self.assertTrue(eg.claim_due({"claim": "x", "checked": "2026-08-29"}, st, NOW))  # exactly checked + 3 days: due
+        self.assertEqual(eg.claims_view(st, NOW)[3]["next"], "2026-09-19")
+        # the interval rule never reads the claims, whatever their shape
+        self.assertTrue(eg.compute_next(st, 0.0, NOW, use_time=True, jitter=False)["verify_at_use"])
+
+    def test_claims_command_lists_stamps_and_adds(self):
+        d = Path(self.tmp.name) / "vau"
+        eg.main(["init", str(d), "--name", "vau", "--topic", "t", "--tier", "fast", "--standalone"])
+        _, st = eg.load_state(d)
+        st.update(verify_at_use=True, next_due=None, volatile_claims=["first claim", {"claim": "second", "checked": "2020-01-01"}])
+        eg.save_state(d, st)
+        out = capture(["claims", str(d)])
+        self.assertIn("  1  DUE  first claim  [no date: due at every use]", out)
+        self.assertIn("-- vau: 2 of 2 claim(s) due", out)
+        self.assertIn("claims due 2", capture(["status", str(d)]))
+        out = capture(["claims", str(d), "--stamp", "1"])
+        self.assertIn("stamped 1", out)
+        claims = eg.load_state(d)[1]["volatile_claims"]
+        self.assertEqual(claims[0], {"claim": "first claim", "checked": eg.today().isoformat()})  # a string became an object
+        self.assertEqual(claims[1]["checked"], "2020-01-01")
+        self.assertEqual(json.loads(capture(["claims", str(d), "--due", "--json"]))["claims"][0]["n"], 2)
+        capture(["claims", str(d), "--stamp", "due", "--recheck-days", "30"])
+        claims = eg.load_state(d)[1]["volatile_claims"]
+        self.assertEqual((claims[1]["checked"], claims[1]["recheck_days"]), (eg.today().isoformat(), 30))
+        self.assertIn("0 of 2 claim(s) due", capture(["claims", str(d)]))
+        self.assertIn("added claim 3", capture(["claims", str(d), "--add", "third  claim"]))
+        self.assertIn("already listed", capture(["claims", str(d), "--add", "third claim"]))
+        self.assertIn("no claim 9", capture(["claims", str(d), "--stamp", "9"]))
+        self.assertEqual(len(eg.load_state(d)[1]["volatile_claims"]), 3)
+        # checked --use-time keeps working on the new shape
+        capture(["checked", str(d), "--m", "0", "--use-time", "--no-notify"])
+        self.assertEqual(eg.load_state(d)[1]["history"][-1]["note"], "use-time check")
+
+    def test_brief_audit_reports_due_claims_and_consolidation_only_when_due(self):
+        root = Path(self.tmp.name) / "roots"
+        d = root / "vau"
+        eg.main(["init", str(d), "--name", "vau", "--topic", "t", "--tier", "fast", "--standalone"])
+        _, st = eg.load_state(d)
+        st.update(verify_at_use=True, next_due=None, volatile_claims=[{"claim": "fresh", "checked": eg.today().isoformat()}])
+        eg.save_state(d, st)
+        self.assertEqual(capture(["audit", "--brief", "--roots", str(root)]), "")  # nothing due: silent, as before
+        st["volatile_claims"].append("a legacy string claim")  # old data keeps the old behavior: due at every use
+        eg.save_state(d, st)
+        out = capture(["audit", "--brief", "--roots", str(root)])
+        self.assertIn("claims due 1", out)
+        self.assertIn("1 verify-at-use unit(s) have volatile claims due", out)
+        # learnings past consolidate_every: reported at session start, not only by lint
+        c = root / "cons"
+        eg.main(["init", str(c), "--name", "cons", "--topic", "t", "--tier", "moderate", "--standalone"])
+        _, cst = eg.load_state(c)
+        cst["consolidate_every"] = 2
+        eg.save_state(c, cst)
+        entry = "### L-{n:03d} · 2026-09-01 · lesson {n}\n- Trigger: t\n- Hypothesis: h\n- Rule: r\n- Evidence: e\n- Status: active\n\n"
+        lp = c / "LEARNINGS.md"
+        lp.write_text(lp.read_text(encoding="utf-8") + "".join(entry.format(n=n) for n in (1, 2)), encoding="utf-8")
+        self.assertNotIn("consolidat", capture(["audit", "--brief", "--roots", str(root)]))  # 2 is not past 2
+        lp.write_text(lp.read_text(encoding="utf-8") + entry.format(n=3), encoding="utf-8")
+        out = capture(["audit", "--brief", "--roots", str(root)])
+        self.assertIn("[consolidate:3>2]", out)
+        self.assertIn("learnings consolidation due in 1 unit(s)", out)
+        self.assertIn("consolidate:3>2", capture(["status", str(c)]))
+
+    def test_typed_related_lines_are_linted(self):
+        d = Path(self.tmp.name) / "rel"
+        eg.main(["init", str(d), "--name", "rel", "--topic", "t", "--standalone"])
+        _, st = eg.load_state(d)
+        self.assertEqual([n for n in eg.lint(d, st) if "Related" in n], [])  # a unit with no Related line is fine
+        self.assertEqual(eg.parse_related("supersedes [a](a.md); builds on [b](b.md), [c](c.md); see also [d](d.md)"),
+                         [{"label": "supersedes", "known": True, "links": [("a", "a.md")]},
+                          {"label": "builds on", "known": True, "links": [("b", "b.md"), ("c", "c.md")]},
+                          {"label": "see also", "known": True, "links": [("d", "d.md")]}])
+        self.assertEqual(eg.parse_related("[x](x.md) (why; it matters), [y](y.md)")[0]["label"], "see also")  # unlabelled
+        (d / "notes").mkdir()
+        (d / "notes" / "old.md").write_text("# Old\n", encoding="utf-8")
+        (d / "notes" / "new.md").write_text(
+            "# New\n\nRelated: supersedes [the old note](old.md); builds on [the skill](../SKILL.md); see also [web](https://example.com)\n"
+            "- Related: [anchor only](#here), [with anchor](old.md#section)\n"
+            "Related: replaces [gone](missing.md); contradicts [[Wiki Link]]\n"
+            "```\nRelated: builds on [example](nowhere.md)\n```\n"
+            "Inline `Related: [x](nowhere.md)` is an example, and so is <!-- Related: [y](nowhere.md) -->.\n",
+            encoding="utf-8")
+        probs = [n for n in eg.lint(d, st) if "Related" in n]
+        self.assertEqual(sorted(probs), sorted([
+            "notes/new.md:5: wikilink on a Related line (use a relative markdown link)",
+            "notes/new.md:5: unknown Related label 'replaces' (labels: supersedes, superseded by, contradicts, builds on, see also)",
+            "notes/new.md:5: Related target does not exist: missing.md",
+        ]))
+        self.assertIn("unknown Related label 'replaces'", capture(["lint", str(d)]))
+        (d / "notes" / "new.md").write_text("Related: superseded by [new](old.md)\n**Related:** see also [skill](../SKILL.md)\n", encoding="utf-8")
+        self.assertEqual([n for n in eg.lint(d, st) if "Related" in n], [])
+
+    def test_search_ranks_log_entries_across_registered_units(self):
+        for tok, want in (("changes", "chang"), ("changed", "chang"), ("changing", "chang"), ("entries", "entry"),
+                          ("passes", "pass"), ("status", "status"), ("stopped", "stop"), ("applied", "apply"), ("sh", "sh")):
+            self.assertEqual(eg.stem(tok), want, tok)
+        toks = eg.search_tokens("Run `evergreen.py claims` with --use-time; see L-021 and verify_at_use")
+        for t in ("evergreen.py", "claim", "use-time", "l-021", "verify_at_use", "verify"):
+            self.assertIn(t, toks)
+        self.assertNotIn("and", toks)
+        a = Path(self.tmp.name) / "alpha"
+        b = Path(self.tmp.name) / "beta"
+        for d, name in ((a, "alpha"), (b, "beta")):
+            eg.main(["init", str(d), "--name", name, "--topic", "t", "--tier", "moderate", "--standalone", "--last-checked", "2026-09-01"])
+        la = a / "LEARNINGS.md"
+        la.write_text(la.read_text(encoding="utf-8") +
+                      "### L-001 · 2026-09-02 · Copilot CLI hangs on tool approval when run non-interactively\n"
+                      "- Trigger: `copilot -p` hung twice\n- Hypothesis: approvals\n- Rule: pass --allow-all-tools\n- Evidence: x\n\n"
+                      "### L-002 · 2026-09-03 · Gmail refuses zips holding scripts\n- Trigger: mail bounced\n- Hypothesis: h\n- Rule: r\n- Evidence: e\n",
+                      encoding="utf-8")
+        rb = b / "RESEARCH.md"
+        rb.write_text(rb.read_text(encoding="utf-8") + "\n### R-20260905-1 · 2026-09-05 · Non-interactive runs of coding agents need explicit tool approval\n"
+                      "- Summary: headless agents block on approval prompts unless tools are pre-approved\n- Magnitude: 0.3\n", encoding="utf-8")
+        out = capture(["search", "copilot hangs waiting for tool approval"])
+        first = out.splitlines()[0]
+        self.assertIn("alpha  L-001  Copilot CLI hangs on tool approval", first)
+        line = la.read_text(encoding="utf-8").splitlines().index(
+            "### L-001 · 2026-09-02 · Copilot CLI hangs on tool approval when run non-interactively") + 1
+        self.assertTrue(first.rstrip().endswith(f"LEARNINGS.md:{line}"), first)
+        self.assertIn("beta  R-20260905-1", out)  # every registered unit is searched
+        js = json.loads(capture(["search", "tool approval", "--kinds", "research", "--json"]))
+        self.assertEqual(js["hits"][0]["id"], "R-20260905-1")
+        self.assertEqual({h["kind"] for h in js["hits"]}, {"research"})
+        self.assertEqual(js["units"], 2)
+        js = json.loads(capture(["search", "tool approval", "--unit", "alpha", "-n", "1", "--json"]))
+        self.assertEqual((js["units"], [h["id"] for h in js["hits"]]), (1, ["L-001"]))
+        self.assertIn("-- no match", capture(["search", "zzzqqq"]))
+        self.assertIn("no unit named nobody", capture(["search", "x", "--unit", "nobody"]))
+        # the template's commented example entry is not an entry, and neither is the header's quoted entry shape
+        hits = json.loads(capture(["search", "one-line lesson in plain words", "--kinds", "learnings", "--json"]))["hits"]
+        self.assertFalse(any("One-line lesson" in h["heading"] for h in hits), hits)
+        self.assertEqual([len(eg.split_entries("# T\n\nEntry shape: `### C-YYYYMMDD-n · date · x`\n\n## Log\n"))], [0])
+
+    def test_eval_export_writes_plugin_eval_case_folders(self):
+        d = Path(self.tmp.name) / "exp-skill"
+        eg.main(["init", str(d), "--name", "exp-skill", "--topic", "t", "--standalone"])
+        self.assertIn("skipped (no id, or a TODO prompt)", capture(["eval-export", str(d)]))  # the template's TODO cases
+        suite = {"skill": "exp-skill", "evals": [
+            {"id": "trigger-1", "kind": "trigger", "prompt": "Render the scene on the Mac", "expectations": ["the exp-skill skill is invoked"], "runs": 3},
+            {"id": "decoy-1", "kind": "trigger", "decoy": True, "prompt": "Fix the bug in worker.py", "expectations": ["the exp-skill skill is not invoked"]},
+            {"id": "action-1", "kind": "action", "prompt": "Delegate the render", "evidence": {"type": "trace", "tool": "Bash", "input_match": "ssh\\s+mac",
+                                                                                                 "or": {"type": "file", "path": "out.png"}}},
+            {"id": "action-2", "kind": "action", "prompt": "Write the report", "evidence": {"type": "file", "path": "report.md"}},
+            {"id": "action-3", "kind": "action", "prompt": "Check the queue", "evidence": {"type": "command", "run": "curl x", "expect": "ok"}},
+            {"id": "outcome-1", "kind": "outcome", "prompt": "What passes a test?", "expectations": ["names evidence outside the transcript",
+                                                                                                    "regex on the answer: (evidence|trace).*(never|not)"]},
+        ]}
+        (d / "evals" / "evals.json").write_text(json.dumps(suite), encoding="utf-8")
+        out = capture(["eval-export", str(d)])
+        self.assertIn("wrote 6 case folder(s)", out)
+        self.assertIn("action-3: evidence type command has no plugin-eval grader", out)
+        self.assertIn("action-1: the alternative evidence (file) is not exported", out)
+        cases = d / "evals" / "cases"
+        p = (cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8")
+        self.assertTrue(p.startswith("---\nmax_turns: 8\ntimeout_seconds: 240\nallowed_tools: [Read, Glob, Grep, Skill]\nruns: 3\n---\n\nRender the scene on the Mac"))
+        fires = (cases / "trigger-1" / "graders" / "fires.md").read_text(encoding="utf-8")
+        self.assertIn("type: tool_used\n", fires)
+        self.assertIn("input_match: '\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?exp-skill\"'", fires)
+        quiet = (cases / "decoy-1" / "graders" / "quiet.md").read_text(encoding="utf-8")
+        self.assertIn("min: 0\nmax: 0\narm: both\n", quiet)
+        self.assertIn("(?:[\\w-]+:)?exp-skill'", quiet)  # a prefix: every skill of that name family stays quiet
+        self.assertIn("allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]", (cases / "action-1" / "prompt.md").read_text(encoding="utf-8"))
+        self.assertIn("tool: Bash\ninput_match: 'ssh\\s+mac'\nmin: 1", (cases / "action-1" / "graders" / "evidence.md").read_text(encoding="utf-8"))
+        self.assertIn("type: file_exists\n", (cases / "action-2" / "graders" / "evidence.md").read_text(encoding="utf-8"))
+        self.assertFalse((cases / "action-3" / "graders").exists() and any((cases / "action-3" / "graders").iterdir()))
+        self.assertIn("pattern: '(evidence|trace).*(never|not)'", (cases / "outcome-1" / "graders" / "regex-2.md").read_text(encoding="utf-8"))
+        self.assertIn("- names evidence outside the transcript", (cases / "outcome-1" / "graders" / "judge.md").read_text(encoding="utf-8"))
+        self.assertNotIn(b"\r", (cases / "outcome-1" / "graders" / "judge.md").read_bytes())
+        # hand-tuned folders are kept unless --force
+        (cases / "trigger-1" / "prompt.md").write_text("tuned by hand\n", encoding="utf-8")
+        self.assertIn("kept 6 existing", capture(["eval-export", str(d)]))
+        self.assertEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
+        capture(["eval-export", str(d), "--force"])
+        self.assertNotEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
+        # the plugin's own suite: the skill comes from each case's expectations, and a plugin-wide decoy uses the suite name
+        o = Path(self.tmp.name) / "plugin-cases"
+        written, kept, _ = eg.eval_export(eg.plugin_root(), o)
+        self.assertIn("trigger-4", written)
+        self.assertIn("evergreen-learn\"'", (o / "trigger-4" / "graders" / "fires.md").read_text(encoding="utf-8"))
+        self.assertIn("(?:[\\w-]+:)?evergreen'", (o / "decoy-2" / "graders" / "quiet.md").read_text(encoding="utf-8"))
+
+    def test_bench_intervals_smoke(self):
+        import bench_intervals as bi
+        res = bi.run(seed=3, days=120, units=2)
+        again = bi.run(seed=3, days=120, units=2)
+        self.assertEqual(res, again)  # deterministic for a seed
+        self.assertEqual([c["class"] for c in res["classes"]], [c[0] for c in bi.CLASSES])
+        for row in res["classes"]:
+            p = row["policies"]
+            self.assertEqual(p["oracle"]["delay_all"] or 0.0, 0.0)
+            self.assertAlmostEqual(p["matched"]["checks_per_year"], p["evergreen"]["checks_per_year"])  # same budget per unit
+            for pol in bi.POLICIES:
+                self.assertGreaterEqual(p[pol]["checks_per_year"], 0)
+                self.assertTrue(0.0 <= p[pol]["stale_share"] <= 1.0)
+        table = bi.render(res)
+        self.assertIn("| evergreen |", table)
+        self.assertIn("| 2d (live) |", table)
+        self.assertIs(bi.eg.compute_next, eg.compute_next)  # the benchmark runs the shipped rule, not a copy
+
 
 import evergreen_sync as es  # noqa: E402
 
@@ -735,7 +967,7 @@ class Sync(unittest.TestCase):
         sk.write_text(sk.read_text(encoding="utf-8").replace("One table, then action.", "One table, then action. (remote)"), encoding="utf-8")
         st = json.loads((self.copy / "evergreen.json").read_text(encoding="utf-8"))
         st["history"].append({"date": "2026-09-09", "m": 0.0, "interval_after": 21, "note": "remote check"})
-        st["last_checked"] = "2026-09-12"
+        st["last_checked"] = "2099-09-12"  # later than any real check, so the remote state is the newer one
         (self.copy / "evergreen.json").write_text(json.dumps(st, indent=2) + "\n", encoding="utf-8")
         (self.copy / "templates" / "NEW.template").write_text("new\n", encoding="utf-8")
         b = es.build_bundle()
@@ -764,7 +996,7 @@ class Sync(unittest.TestCase):
         self.assertIn("(remote)", skt)
         self.assertIn("(trunk)", skt)
         tst = json.loads((trunk / "evergreen.json").read_text(encoding="utf-8"))
-        self.assertEqual(tst["last_checked"], "2026-09-12")
+        self.assertEqual(tst["last_checked"], "2099-09-12")
         self.assertTrue(any(h.get("note") == "remote check" for h in tst["history"]))
         self.assertTrue((trunk / "templates" / "NEW.template").exists())
         # second merge is a no-op
@@ -1070,6 +1302,15 @@ class GitTransport(unittest.TestCase):
         self.assertEqual(self._g(self.clone, "status", "--porcelain"), "")
         self.assertTrue((self.home / "publish.json").exists())
         self.assertIn("already up to date", es.pull())
+
+    def test_changed_paths_keep_the_first_path_whole(self):
+        self._edit()  # " M LEARNINGS.md" is the first porcelain line; stripped output used to cut it to "EARNINGS.md" (L-022)
+        (self.clone / "templates" / "NEW.template").write_text("x\n", encoding="utf-8")
+        self.assertEqual(sorted(es.changed_paths(self.clone)), ["LEARNINGS.md", "templates/NEW.template"])
+        msg = es.commit_message(self.clone, self.cfg, "test-env", es.changed_paths(self.clone))
+        self.assertIn("L-901", msg.splitlines()[0])
+        self.assertIn("- templates/NEW.template", msg)
+        self.assertNotIn("EARNINGS.md", msg.replace("LEARNINGS.md", ""))
 
     def test_publish_as_contributor_uses_update_branch(self):
         self.cfg["role"] = "contributor"

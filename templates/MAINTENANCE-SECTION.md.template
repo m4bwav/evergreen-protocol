@@ -1,6 +1,6 @@
 ## Step 0: freshness (every use, one read)
 
-Read `evergreen.json` next to this file. If `verify_at_use` is true, re-check the listed `volatile_claims` before relying on them. If `contradiction` is set or today is on or after `next_due`, tell the user in one line, do the task with the current content, then run the refresh (`evergreen-refresh`, or the procedure in {{PROTOCOL}}) in the same session. If `tests.failing` is non-empty, say so in one line and run `evergreen-tune` after the task. Never block the task on a refresh unless the task depends on the stale claim.
+Read `evergreen.json` next to this file. If `verify_at_use` is true, re-check the due `volatile_claims` before relying on them, one search each (a plain string is always due; an object is due once its `checked` date plus `recheck_days`, default the unit's interval, is today or earlier), then stamp them (`evergreen.py claims <unit> --stamp due`). If `contradiction` is set or today is on or after `next_due`, tell the user in one line, do the task with the current content, then run the refresh (`evergreen-refresh`, or the procedure in {{PROTOCOL}}) in the same session. If `tests.failing` is non-empty, say so in one line and run `evergreen-tune` after the task. Never block the task on a refresh unless the task depends on the stale claim.
 
 ## While working: capture learnings
 

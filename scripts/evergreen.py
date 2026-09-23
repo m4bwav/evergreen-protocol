@@ -12,6 +12,10 @@ Commands
   next    <unit> --m 0.4            dry-run the interval rule
   checked <unit> --m 0.4 [--note ..] [--contradiction] [--use-time]
                                     record a refresh; compute next_due
+  claims  <unit> [--due] [--stamp n,m|due|all] [--add "claim"] [--recheck-days N] [--json]
+                                    volatile claims with index numbers and due flags; --stamp sets checked to today
+  search  "query" [--unit NAME] [--kinds learnings,research,changes,tests] [-n 5] [--json]
+                                    BM25 over the log entries of every registered unit (near-duplicates, prior findings)
   flag    <unit> [--contradiction "why"] [--clear-contradiction]
                  [--event 2026-11-15:label:2] [--clear-failing [ID ...]]
   init    <dir> --name N --topic T [--kind skill] [--tier moderate]
@@ -21,13 +25,14 @@ Commands
   tested  <unit> --passed N --failed N [--failing id,id] [--harness H] [--env E] [--note ..]
                                     record a suite run; prints the next T- id for TESTS.md
   failed  <unit> --case ID --class CLASS [--note ..]   record a failure seen in use; says whether research is due first
+  eval-export <unit> [--out DIR] [--force]   write `claude plugin eval` case folders from evals/evals.json
   use-log                           PostToolUse hook body (stdin JSON): append a Skill use to EVERGREEN_HOME/uses.jsonl
   uses    [--skill NAME] [--days 7] [--limit 20] [--json]   recent skill uses, newest first
   map-slug <repo>                   slug for a repo path
   map-init <repo> [--name N]        create a codemap unit in the store
   drift   <map-unit> [--update-sha] commits/files changed since stamped sha
   links   <unit>                    verify double links and entry IDs
-  lint    <unit>                    budgets, learnings fields, consolidation
+  lint    <unit>                    budgets, learnings fields, consolidation, typed Related: lines
   register <unit> | unregister <unit>
   bump    <unit> --learnings|--changes|--research|--tests
   export  <repo>                    copy the plugin into <repo>/.agents/ for non-Claude agents
@@ -52,6 +57,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -60,8 +66,10 @@ import socket
 import subprocess
 import sys
 import zipfile
+from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import unquote
 
 PROTOCOL_VERSION = "1.0"
 
@@ -149,8 +157,14 @@ def load_state(unit: str | Path) -> tuple[Path, dict]:
     return d, json.loads(f.read_text(encoding="utf-8"))
 
 
+def write_lf(p: Path, text: str) -> None:
+    """UTF-8 text with LF endings on every platform. Path.write_text turns "\\n" into CRLF on Windows (and its newline=
+    argument is Python 3.10+), so every check recorded there rewrote evergreen.json with CRLF (L-020)."""
+    p.write_bytes(text.encode("utf-8"))
+
+
 def save_state(d: Path, st: dict) -> None:
-    (d / "evergreen.json").write_text(json.dumps(st, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_lf(d / "evergreen.json", json.dumps(st, indent=2, ensure_ascii=False) + "\n")
 
 
 def today() -> date:
@@ -222,7 +236,7 @@ def load_registry() -> dict:
 def save_registry(reg: dict) -> None:
     p = registry_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_lf(p, json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
 
 
 # ---------- contribution choice (PROTOCOL.md section 10) ----------
@@ -417,7 +431,7 @@ def compute_next(st: dict, m: float | None, now: datetime, contradiction: bool =
         if st["tier"] in ("fast", "live") and streak["pinned_min"] >= 3:
             st["verify_at_use"] = True
             streak["pinned_min"] = 0
-            report.append("pinned at min 3x: verify_at_use ON (re-check volatile_claims at every use; no calendar)")
+            report.append("pinned at min 3x: verify_at_use ON (re-check the due volatile_claims at each use; no calendar)")
         elif st["tier"] not in ("fast", "live") and streak["pinned_min"] >= 2:
             new_tier = TIER_ORDER[idx - 1]
             mn, mx = _migrate(st, new_tier, report, "pinned at min 2x")
@@ -467,6 +481,58 @@ def compute_next(st: dict, m: float | None, now: datetime, contradiction: bool =
     return st
 
 
+# ---------- volatile claims (PROTOCOL.md section 3) ----------
+# An item of `volatile_claims` is either a plain string (the original shape: re-checked at every use, unchanged) or an
+# object {"claim": "...", "checked": "YYYY-MM-DD", "recheck_days": N}, where `recheck_days` is optional and defaults to
+# the unit's current interval_days. A claim is due when it is a string, has no readable `checked` date, or when
+# checked + recheck_days is today or earlier. Step 0 of a verify-at-use unit re-checks only the due claims, then
+# stamps them (`claims <unit> --stamp due`), so verifying at use costs a search per due claim, not per claim.
+
+def claim_text(c) -> str:
+    return str(c.get("claim") or "") if isinstance(c, dict) else str(c)
+
+
+def claim_recheck_days(c, st: dict) -> float:
+    """Days between re-checks of one claim: its own recheck_days, else the unit's interval, else the tier's start."""
+    if isinstance(c, dict) and c.get("recheck_days") is not None:
+        try:
+            return max(0.0, float(c["recheck_days"]))
+        except (TypeError, ValueError):
+            pass
+    for v in (st.get("interval_days"), bounds_for(st)[2]):
+        if v:
+            return float(v)
+    return 0.0
+
+
+def claim_due(c, st: dict, now: datetime | None = None) -> bool:
+    if not isinstance(c, dict):
+        return True  # a plain string carries no date: re-checked at every use, as before
+    checked = parse_when(c.get("checked"))
+    if checked is None:
+        return True
+    return checked + timedelta(days=claim_recheck_days(c, st)) <= (now or datetime.now())
+
+
+def claims_due(st: dict, now: datetime | None = None) -> int:
+    return sum(1 for c in (st.get("volatile_claims") or []) if claim_due(c, st, now))
+
+
+def claims_view(st: dict, now: datetime | None = None) -> list[dict]:
+    """One row per claim, numbered from 1 in file order (the numbers `claims --stamp` takes)."""
+    now = now or datetime.now()
+    rows = []
+    for i, c in enumerate(st.get("volatile_claims") or [], 1):
+        obj = isinstance(c, dict)
+        days = claim_recheck_days(c, st)
+        checked = parse_when(c.get("checked")) if obj else None
+        rows.append({"n": i, "claim": claim_text(c), "checked": c.get("checked") if obj else None,
+                     "recheck_days": c.get("recheck_days") if obj else None, "effective_recheck_days": days,
+                     "next": fmt_when(checked + timedelta(days=days)) if checked else None,
+                     "due": claim_due(c, st, now)})
+    return rows
+
+
 # ---------- status ----------
 
 def freshness(st: dict, now: datetime | None = None) -> dict:
@@ -480,6 +546,7 @@ def freshness(st: dict, now: datetime | None = None) -> dict:
     if st.get("verify_at_use"):
         out["flags"].append("verify-at-use")
         out["status"] = "n/a"
+        out["claims_due"] = claims_due(st, now)  # what Step 0 re-checks at the next use
         return out
     if st.get("tier") == "none":
         out["status"] = "n/a"
@@ -598,6 +665,8 @@ def status_line(d: Path, st: dict, fr: dict, verbose: bool = False) -> str:
         extra = f" overdue {fr['overdue_days']}d"
     elif "due_in_days" in fr:
         extra = f" due in {fr['due_in_days']}d"
+    elif "claims_due" in fr:
+        extra = f" claims due {fr['claims_due']}"
     src = source_state(d, st)
     tag = ""
     if src == "installed-copy":
@@ -729,7 +798,7 @@ def write_templates(d: Path, files: dict, subs: dict) -> list[str]:
             notes.append(f"missing template {t_name}")
             continue
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(render(t.read_text(encoding="utf-8"), subs), encoding="utf-8")
+        write_lf(out, render(t.read_text(encoding="utf-8"), subs))
         notes.append(f"wrote {out_name}")
     return notes
 
@@ -755,13 +824,13 @@ def scaffold(d: Path, st: dict, standalone: bool, append_maintenance: bool, kind
         if not main.exists():
             t = tdir / "SKILL.md.template"
             if t.exists():
-                main.write_text(render(t.read_text(encoding="utf-8"), subs), encoding="utf-8")
+                write_lf(main, render(t.read_text(encoding="utf-8"), subs))
                 notes.append(f"wrote {st['main']} from template (edit it)")
         elif append_maintenance:
             t = tdir / "MAINTENANCE-SECTION.md.template"
             txt = main.read_text(encoding="utf-8")
             if "evergreen.json" not in txt and t.exists():
-                main.write_text(txt.rstrip("\n") + "\n\n" + render(t.read_text(encoding="utf-8"), subs), encoding="utf-8")
+                write_lf(main, txt.rstrip("\n") + "\n\n" + render(t.read_text(encoding="utf-8"), subs))
                 notes.append(f"appended Step 0 / learnings / Maintenance sections to {st['main']}")
             else:
                 notes.append(f"{st['main']} already references evergreen.json; nothing appended")
@@ -825,8 +894,11 @@ def check_links(d: Path, st: dict) -> list[str]:
     if "main" in texts and "evergreen" not in texts["main"].lower():
         problems.append(f"{names['main']} never mentions evergreen (add the Maintenance section)")
     defined, referenced = set(), set()
-    for txt in texts.values():
-        defined |= set(DEF_RE.findall(txt))
+    for k, txt in texts.items():
+        heads = DEF_RE.findall(txt)
+        for rid in sorted({h for h in heads if heads.count(h) > 1}):  # the union merge driver keeps both sides (.gitattributes)
+            problems.append(f"{names[k]}: {rid} is defined {heads.count(rid)} times (a union merge kept both copies; renumber or remove one)")
+        defined |= set(heads)
         referenced |= set(ID_RE.findall(txt))
     arch_txt = ""
     for arch in d.glob("*-ARCHIVE.md"):
@@ -879,17 +951,15 @@ def lint(d: Path, st: dict) -> list[str]:
     lp = files.get("learnings")
     if lp and lp.exists():
         txt = strip_comments(lp.read_text(encoding="utf-8", errors="replace"))
-        entries = re.split(r"^###\s+L-\d{3,}", txt, flags=re.M)[1:]
-        heads = re.findall(r"^###\s+(L-\d{3,})[^\n]*", txt, flags=re.M)
-        active = 0
-        for head, body in zip(heads, entries):
-            if re.search(r"Status:\s*(promoted|retired)", body):
+        entries = learning_entries(txt)
+        for head, body, is_active in entries:
+            if not is_active:
                 continue
-            active += 1
             for field in ("Trigger", "Hypothesis", "Rule", "Evidence"):
                 if not re.search(rf"^\s*-\s*{field}:", body, flags=re.M):
                     notes.append(f"{head}: missing {field}")
-        if active > int(st.get("consolidate_every", 25)):
+        active = sum(1 for e in entries if e[2])
+        if active > consolidate_limit(st):
             notes.append(f"LEARNINGS.md: {active} active entries > consolidate_every; run a consolidation pass")
         if len(txt.splitlines()) > BUDGETS["learnings"]:
             notes.append(f"LEARNINGS.md: over {BUDGETS['learnings']} lines; archive retired entries")
@@ -923,7 +993,398 @@ def lint(d: Path, st: dict) -> list[str]:
                 notes.append(f"{head}: no 'led to:' line (L-, C-, R- ids or none)")
         if len(txt.splitlines()) > BUDGETS["tests"]:
             notes.append(f"{tp.name}: over {BUDGETS['tests']} lines; archive older runs to TESTS-ARCHIVE.md")
+    notes += related_problems(d, unit_markdown(d))
     return notes
+
+
+def learning_entries(txt: str) -> list[tuple[str, str, bool]]:
+    """(id, body, active) for every `### L-nnn` entry of a LEARNINGS.md text; promoted and retired ones are not active."""
+    heads = re.findall(r"^###\s+(L-\d{3,})[^\n]*", txt, flags=re.M)
+    bodies = re.split(r"^###\s+L-\d{3,}", txt, flags=re.M)[1:]
+    return [(h, b, not re.search(r"Status:\s*(promoted|retired)", b)) for h, b in zip(heads, bodies)]
+
+
+def consolidate_limit(st: dict) -> int:
+    try:
+        return int(st.get("consolidate_every") or 25)
+    except (TypeError, ValueError):
+        return 25
+
+
+def consolidation_due(d: Path, st: dict) -> tuple[int, int] | None:
+    """(active, limit) when the unit's active learnings exceed consolidate_every (PROTOCOL.md section 6), else None.
+    One small file read, so the session-start audit can afford it."""
+    lp = unit_files(d, st).get("learnings")
+    if not lp or not lp.exists():
+        return None
+    try:
+        txt = strip_comments(lp.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return None
+    active, limit = sum(1 for e in learning_entries(txt) if e[2]), consolidate_limit(st)
+    return (active, limit) if active > limit else None
+
+
+# ---------- typed links (PROTOCOL.md section 9) ----------
+# `Related: supersedes [a](a.md); builds on [b](b.md), [c](c.md); see also [d](d.md)`: segments split at `;`, each an
+# optional label and one or more relative markdown links. An unlabelled link counts as `see also`, so older lines stay
+# valid. The lint reports unknown labels, targets that do not exist, and wikilinks; a unit with no Related line is fine.
+
+RELATED_LABELS = ("supersedes", "superseded by", "contradicts", "builds on", "see also")
+RELATED_LINE_RE = re.compile(r"^\s*(?:[-*+]\s+)?(?:\*\*|__)?Related(?:\*\*|__)?\s*:\s*(?:\*\*|__)?(.*)$")
+MD_LINK_RE = re.compile(r"\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^\"'\n]*[\"'])?\s*\)")
+WIKILINK_RE = re.compile(r"\[\[[^\]\n]+\]\]")
+URL_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def split_related(text: str) -> list[str]:
+    """Split the text after `Related:` at semicolons that sit outside brackets and parentheses."""
+    parts, cur, depth = [], [], 0
+    for ch in text:
+        if ch in "[(":
+            depth += 1
+        elif ch in "])":
+            depth = max(0, depth - 1)
+        if ch == ";" and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur))
+    return [p for p in parts if p.strip()]
+
+
+def parse_related(text: str) -> list[dict]:
+    """[{label, known, links: [(title, target)]}] for the text after `Related:`; segments without a link are skipped."""
+    out = []
+    for seg in split_related(text):
+        links = list(MD_LINK_RE.finditer(seg))
+        if not links:
+            continue
+        label = re.sub(r"\s+", " ", seg[:links[0].start()]).strip().rstrip(":").strip().lower()
+        label = label or "see also"
+        out.append({"label": label, "known": label in RELATED_LABELS, "links": [(m.group(1), m.group(2)) for m in links]})
+    return out
+
+
+def unit_markdown(d: Path, limit: int = 400) -> list[Path]:
+    """The markdown files of a unit folder (hidden, vendored and generated folders skipped), capped for big trees."""
+    skip = {"node_modules", "__pycache__", "venv", "dist", "build", "results", "site-packages"}
+    out: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(d):
+        dirnames[:] = sorted(x for x in dirnames if x not in skip and not x.startswith("."))
+        out += [Path(dirpath) / f for f in sorted(filenames) if f.lower().endswith(".md")]
+        if len(out) >= limit:
+            break
+    return out[:limit]
+
+
+def related_problems(d: Path, paths: list[Path]) -> list[str]:
+    """Unknown labels, missing targets and wikilinks on `Related:` lines, outside code fences, inline code and comments."""
+    out = []
+    for p in paths:
+        try:
+            txt = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        txt = COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), txt)  # keep line numbers
+        try:
+            rel = p.relative_to(d).as_posix()
+        except ValueError:
+            rel = p.name
+        fence = False
+        for no, ln in enumerate(txt.splitlines(), 1):
+            if re.match(r"^\s*(```|~~~)", ln):
+                fence = not fence
+                continue
+            m = None if fence else RELATED_LINE_RE.match(ln)
+            if not m:
+                continue
+            rest = re.sub(r"`[^`\n]*`", "", m.group(1))  # an example in inline code is not a link
+            if WIKILINK_RE.search(rest):
+                out.append(f"{rel}:{no}: wikilink on a Related line (use a relative markdown link)")
+            for seg in parse_related(rest):
+                if not seg["known"]:
+                    out.append(f"{rel}:{no}: unknown Related label '{seg['label']}' (labels: {', '.join(RELATED_LABELS)})")
+                for _title, target in seg["links"]:
+                    if target.startswith("#") or URL_SCHEME_RE.match(target):
+                        continue
+                    path = unquote(target.split("#", 1)[0].split("?", 1)[0])
+                    if path and not (p.parent / path).exists():
+                        out.append(f"{rel}:{no}: Related target does not exist: {target}")
+    return out
+
+
+# ---------- search (BM25 over log entries) ----------
+# Finds an entry by what it says, not only by the words of its title: the write-time gate (LEARNINGS-FORMAT.md) and a
+# refresh's "new, or already known?" question both need that. Entries are the `### ` sections of the companion logs
+# (archives included: a rule retired for cause should not come back unnoticed). Plain BM25, heading terms weighted 3.
+
+SEARCH_KINDS = {"learnings": ("learnings", "LEARNINGS.md"), "research": ("research", "RESEARCH.md"),
+                "changes": ("changelog", "CHANGELOG.md"), "tests": ("tests", "TESTS.md")}
+SEARCH_STOP = frozenset("a an and are as at be but by can do does for from had has have how i if in into is it its of "
+                        "on or so than that the then there these this those to was were what when where which while who "
+                        "why will with not no".split())
+CODE_TOKEN_RE = re.compile(r"[a-z0-9]+(?:[._:/\\-][a-z0-9]+)+")
+WORD_TOKEN_RE = re.compile(r"[a-z0-9]+")
+ENTRY_ID_RE = re.compile(r"^(R-\d{8}-\d+|C-\d{8}-\d+|T-\d{8}-\d+|L-\d{3,})\b")
+
+
+def stem(w: str, min_stem: int = 3) -> str:
+    """Light suffix stemming (s, es, ed, ing) that never leaves a stem shorter than `min_stem`; words with digits
+    are left alone. Crude on purpose: query and entries go through the same function, so it only has to agree."""
+    if len(w) <= min_stem or not w.isalpha():
+        return w
+    if w.endswith("ies") and len(w) - 3 >= min_stem - 1:
+        w = w[:-3] + "y"  # entries -> entry
+    elif w.endswith("es") and w[:-2].endswith(("s", "x", "z", "ch", "sh")) and len(w) - 2 >= min_stem:
+        w = w[:-2]  # passes -> pass, indexes -> index
+    elif w.endswith("s") and not w.endswith(("ss", "us", "is")):
+        w = w[:-1]  # claims -> claim; status, class, analysis stay
+    if w.endswith("ied") and len(w) - 3 >= min_stem - 1:
+        w = w[:-3] + "y"  # applied -> apply
+    else:
+        for suf in ("ing", "ed"):
+            if w.endswith(suf) and len(w) - len(suf) >= min_stem:
+                w = w[:-len(suf)]
+                if len(w) > min_stem and w[-1] == w[-2] and w[-1] not in "lsz":
+                    w = w[:-1]  # stopped -> stop, running -> run
+                break
+    return w[:-1] if len(w) > min_stem and w.endswith("e") else w  # change, changed, changes, changing -> chang
+
+
+def search_tokens(text: str) -> list[str]:
+    """Lowercase alphanumeric words (stop words dropped, stemmed), plus code-like tokens kept whole
+    (`evergreen.py`, `verify_at_use`, `L-021`, `--use-time`), so a query for either form finds the entry."""
+    low = text.lower()
+    toks = [t for t in CODE_TOKEN_RE.findall(low)]
+    toks += [stem(w) for w in WORD_TOKEN_RE.findall(low) if len(w) > 1 and w not in SEARCH_STOP]
+    return toks
+
+
+def split_entries(text: str) -> list[tuple[int, str, str]]:
+    """(line number, heading, body) for each `### ` section; the header before the first entry is not an entry."""
+    lines = COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text).splitlines()  # comments hold template examples; keep line numbers
+    out, cur = [], None
+    for i, ln in enumerate(lines, 1):
+        if ln.startswith("### "):
+            if cur:
+                out.append(cur)
+            cur = [i, ln[4:].strip(), []]
+        elif re.match(r"^#{1,2}\s", ln):
+            if cur:
+                out.append(cur)
+            cur = None
+        elif cur:
+            cur[2].append(ln)
+    if cur:
+        out.append(cur)
+    return [(n, h, "\n".join(b)) for n, h, b in out]
+
+
+def search_units(unit: str | None = None) -> list[tuple[str, Path, dict]]:
+    """Registered units (EVERGREEN_HOME/registry.json); `unit` narrows to one name or points at a unit folder.
+    With nothing registered: the unit around the current directory, else the plugin itself."""
+    found: dict[str, tuple[str, Path, dict]] = {}
+
+    def add(p: Path) -> None:
+        try:
+            d, st = load_state(p)
+        except Exception:
+            return
+        found.setdefault(str(d.resolve()), (str(st.get("name") or d.name), d, st))
+
+    if unit and (unit_dir(unit) / "evergreen.json").exists():
+        add(unit_dir(unit))
+        return list(found.values())
+    for u in load_registry().get("units", []):
+        p = Path(str(u.get("path") or ""))
+        if (p / "evergreen.json").exists():
+            add(p)
+    if not found:
+        for p in [Path.cwd(), *Path.cwd().parents, plugin_root()]:
+            if (p / "evergreen.json").exists():
+                add(p)
+                break
+    units = list(found.values())
+    return [x for x in units if x[0] == unit] if unit else units
+
+
+def search_corpus(units: list[tuple[str, Path, dict]], kinds: list[str]) -> list[dict]:
+    docs = []
+    for name, d, st in units:
+        for kind in kinds:
+            key, default = SEARCH_KINDS[kind]
+            main = d / ((st.get("files") or {}).get(key) or default)
+            for p in (main, main.with_name(main.stem + "-ARCHIVE.md")):
+                if not p.exists():
+                    continue
+                try:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    continue
+                for line, head, body in split_entries(text):
+                    m = ENTRY_ID_RE.match(head)
+                    docs.append({"unit": name, "kind": kind, "path": str(p), "line": line, "heading": head,
+                                 "id": m.group(1) if m else "-", "head_toks": search_tokens(head),
+                                 "body_toks": search_tokens(body)})
+    return docs
+
+
+def bm25(docs: list[dict], query: str, k1: float = 1.2, b: float = 0.75, head_weight: float = 3.0) -> list[tuple[float, dict]]:
+    """Scores for every document with a positive score, best first. A heading term counts `head_weight` times."""
+    q = list(dict.fromkeys(search_tokens(query)))
+    if not docs or not q:
+        return []
+    tfs, lens, df = [], [], Counter()
+    for doc in docs:
+        tf = Counter()
+        for t in doc["head_toks"]:
+            tf[t] += head_weight
+        for t in doc["body_toks"]:
+            tf[t] += 1
+        tfs.append(tf)
+        lens.append(head_weight * len(doc["head_toks"]) + len(doc["body_toks"]))
+        df.update(tf.keys())
+    n, avg = len(docs), (sum(lens) / len(docs)) or 1.0
+    idf = {t: math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5)) for t in q}
+    scored = []
+    for doc, tf, dl in zip(docs, tfs, lens):
+        s = sum(idf[t] * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * dl / avg)) for t in q if tf.get(t))
+        if s > 0:
+            scored.append((s, doc))
+    scored.sort(key=lambda x: (-x[0], x[1]["path"], x[1]["line"]))
+    return scored
+
+
+def entry_title(heading: str) -> str:
+    """The heading without its leading `ID · date ·` (the ID has its own column)."""
+    return re.sub(r"^\S+\s*·\s*\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?\s*·\s*", "", heading).strip()
+
+
+# ---------- eval-export: evals.json -> `claude plugin eval` case folders (TESTING.md section 6) ----------
+# evals.json stays canonical; the harness reads one folder per case, `prompt.md` plus `graders/*.md`. Existing case
+# folders are kept (they may have been tuned by hand) unless --force. The harness has no code graders, so a
+# `command` evidence has no counterpart here and stays with the tester agent.
+
+READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Skill"]
+TRIGGER_SUFFIX = ("(For this run: start the job, and stop after the first two or three tool calls with a one-line note of "
+                  "which skill you invoked and what you would do next.)")
+DECOY_SUFFIX = ("(For this run: say in two or three lines how you would approach it and which tools or skills you would use; "
+                "do not carry it out.)")
+
+
+def _yaml_str(s: str) -> str:
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def _grader(fields: list[tuple[str, str]], body: str = "") -> str:
+    return "---\n" + "".join(f"{k}: {v}\n" for k, v in fields) + "---\n\n" + (body.strip() + "\n" if body.strip() else "")
+
+
+def case_skill(case: dict, data: dict) -> str:
+    """The skill a case is about: its own `skill` field, else the name in 'the X skill is invoked', else the suite's."""
+    if case.get("skill"):
+        return str(case["skill"])
+    for e in case.get("expectations") or []:
+        for m in re.finditer(r"\b([a-z0-9][a-z0-9:-]*)\s+skill\b", str(e)):
+            if m.group(1) not in ("the", "a", "an", "no", "any", "this", "that"):
+                return m.group(1)
+    return str(data.get("skill") or "")
+
+
+def skill_input_match(name: str, exact: bool = True) -> str:
+    """The Skill tool's input as the harness encodes it, with or without a `plugin:` prefix (plugin-evals docs).
+    exact=False matches every skill whose name starts with `name` (a decoy must keep a whole plugin quiet)."""
+    return '"skill"\\s*:\\s*"(?:[\\w-]+:)?' + re.escape(name).replace('\\-', '-') + ('"' if exact else '')
+
+
+def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]:
+    """(prompt.md text, {grader file: text}, notes) for one evals.json case."""
+    kind, notes = str(case.get("kind") or "trigger"), []
+    skill = case_skill(case, data)
+    runs = int(case.get("runs") or 3)
+    prompt = str(case.get("prompt") or "").strip()
+    graders: dict[str, str] = {}
+    if kind == "action":
+        tools, turns, timeout = READ_ONLY_TOOLS + ["Bash", "Write", "Edit"], 25, 600
+        ev = case.get("evidence") or {}
+        t = str(ev.get("type") or "")
+        path = str(ev.get("path") or "")
+        if t == "trace" and ev.get("tool"):
+            fields = [("type", "tool_used"), ("name", _yaml_str("evidence: " + str(ev["tool"]) + " called")), ("tool", str(ev["tool"]))]
+            if ev.get("input_match"):
+                fields.append(("input_match", _yaml_str(ev["input_match"])))
+            graders["evidence.md"] = _grader(fields + [("min", "1"), ("arm", "both")])
+        elif t in ("file", "marker") and path and "<" not in path:
+            graders["evidence.md"] = _grader([("type", "file_exists"), ("name", _yaml_str("evidence: " + path)), ("path", _yaml_str(path)),
+                                              ("exists", "true"), ("arm", "both")])
+        elif t == "log" and path and "<" not in path and ev.get("pattern"):
+            graders["evidence.md"] = _grader([("type", "regex"), ("name", _yaml_str("evidence: log line")),
+                                              ("target", "{source: file, path: " + _yaml_str(path) + "}"),
+                                              ("pattern", _yaml_str(ev["pattern"])), ("match", "contains"), ("arm", "both")])
+        else:
+            notes.append(f"{case.get('id')}: evidence type {t or 'none'} has no plugin-eval grader here (no code graders, "
+                         "or a placeholder path); keep the tester agent for it")
+        alt = ev.get("or") if isinstance(ev.get("or"), dict) else None
+        if alt:
+            notes.append(f"{case.get('id')}: the alternative evidence ({alt.get('type')}) is not exported; graders are all required")
+        notes.append(f"{case.get('id')}: grants Bash, Write and Edit (pass --allow-tools; on native Windows run it under WSL2)")
+    else:
+        tools, turns, timeout = list(READ_ONLY_TOOLS), 8, 240
+        if case.get("decoy"):
+            prompt += "\n\n" + DECOY_SUFFIX
+            graders["quiet.md"] = _grader([("type", "tool_used"), ("name", _yaml_str(f"{skill or 'the skill'} stays quiet")), ("tool", "Skill")]
+                                          + ([("input_match", _yaml_str(skill_input_match(skill, exact=False)))] if skill else [])
+                                          + [("min", "0"), ("max", "0"), ("arm", "both")])
+        elif kind == "trigger":
+            prompt += "\n\n" + TRIGGER_SUFFIX
+            if not skill:
+                notes.append(f"{case.get('id')}: no skill name found (add \"skill\" to the case); the grader checks any Skill call")
+            graders["fires.md"] = _grader([("type", "tool_used"), ("name", _yaml_str(f"{skill or 'a skill'} invoked")), ("tool", "Skill")]
+                                          + ([("input_match", _yaml_str(skill_input_match(skill)))] if skill else [])
+                                          + [("min", "1"), ("arm", "both")])
+        if kind == "outcome":
+            judged = []
+            for i, e in enumerate(case.get("expectations") or [], 1):
+                m = re.match(r"^\s*regex(?: on the (?:answer|reply|output))?\s*:\s*(.+)$", str(e), flags=re.I)
+                if m:
+                    graders[f"regex-{i}.md"] = _grader([("type", "regex"), ("name", _yaml_str(f"expectation {i}")),
+                                                        ("pattern", _yaml_str(m.group(1).strip())), ("flags", "i"),
+                                                        ("match", "contains"), ("arm", "both")])
+                else:
+                    judged.append(str(e))
+            if judged:
+                graders["judge.md"] = _grader([("type", "llm"), ("name", _yaml_str("expectations"))],
+                                              "PASS if the reply meets every one of these:\n" + "\n".join(f"- {j}" for j in judged)
+                                              + "\nFAIL if any is missing or contradicted.")
+    head = f"---\nmax_turns: {turns}\ntimeout_seconds: {timeout}\nallowed_tools: [{', '.join(tools)}]\nruns: {runs}\n---\n\n"
+    return head + prompt + "\n", graders, notes
+
+
+def eval_export(d: Path, out: Path | None = None, force: bool = False) -> tuple[list[str], list[str], list[str]]:
+    """Write one case folder per evals.json case. Returns (written ids, kept ids, notes)."""
+    data = json.loads((d / "evals" / "evals.json").read_text(encoding="utf-8"))
+    cases = [c for c in (data.get("evals") if isinstance(data, dict) else data) or [] if isinstance(c, dict)]
+    out = out or (d / "evals" / "cases")
+    written, kept, notes = [], [], []
+    for c in cases:
+        cid = re.sub(r"[^A-Za-z0-9._-]+", "-", str(c.get("id") or "")).strip("-")
+        if not cid or "TODO" in str(c.get("prompt") or ""):
+            notes.append(f"{cid or '(no id)'}: skipped (no id, or a TODO prompt)")
+            continue
+        cdir = out / cid
+        if (cdir / "prompt.md").exists() and not force:
+            kept.append(cid)
+            continue
+        prompt, graders, n = export_case(c, data)
+        notes += n
+        (cdir / "graders").mkdir(parents=True, exist_ok=True)
+        write_lf(cdir / "prompt.md", prompt)
+        for name, text in graders.items():
+            write_lf(cdir / "graders" / name, text)
+        written.append(cid)
+    return written, kept, notes
 
 
 # ---------- packaging ----------
@@ -1083,7 +1544,7 @@ def pack(out_dir: Path, mail: bool = False, git_tag: bool = True, split_kb: int 
             "own address and `notify.auto` to true. Everything else, protocol, skills, scripts, templates, is complete.\n"
         )
     prompt_path = out_dir / f"evergreen-{ver}{tag}-INSTALL-PROMPT.txt"
-    prompt_path.write_text(prompt, encoding="utf-8")
+    write_lf(prompt_path, prompt)
     if mail:
         renamed = [str(rel) for _, rel in files if rel.suffix.lower() in MAIL_BLOCKED]
         install += (
@@ -1181,10 +1642,18 @@ def cmd_home(a):
     print(evergreen_home())
 
 
+def unit_flags(d: Path, st: dict, fr: dict) -> dict:
+    """Add the flags that never change the freshness status: test state, and learnings past consolidate_every."""
+    fr["flags"] += test_flags(st)
+    cons = consolidation_due(d, st)
+    if cons:
+        fr["flags"].append(f"consolidate:{cons[0]}>{cons[1]}")
+    return fr
+
+
 def cmd_status(a):
     d, st = load_state(a.unit)
-    fr = freshness(st)
-    fr["flags"] += test_flags(st)
+    fr = unit_flags(d, st, freshness(st))
     line = status_line(d, st, fr, verbose=True)
     if st.get("kind") == "map":
         dr = drift(st)
@@ -1198,15 +1667,14 @@ def cmd_status(a):
 def cmd_audit(a):
     roots = [Path(r) for r in a.roots] if a.roots else default_roots()
     units = discover(roots, max_depth=2) if (getattr(a, "brief", False) and not a.roots) else discover(roots)  # hook: shallow walk, 15 s budget
-    rows, stale, problems, failing = [], 0, 0, 0
+    rows, stale, problems, failing, claim_units, consolidate_units = [], 0, 0, 0, 0, 0
     for d in sorted(units, key=lambda p: str(p).lower()):
         try:
             _, st = load_state(d)
         except Exception as e:
             rows.append({"path": str(d), "error": str(e)})
             continue
-        fr = freshness(st)
-        fr["flags"] += test_flags(st)
+        fr = unit_flags(d, st, freshness(st))
         row = {"path": str(d), **fr, "source_state": source_state(d, st), "tests": st.get("tests")}
         if st.get("kind") == "map":
             dr = drift(st)
@@ -1223,11 +1691,17 @@ def cmd_audit(a):
             stale += 1
         if (st.get("tests") or {}).get("failing"):
             failing += 1
+        if fr.get("claims_due"):
+            claim_units += 1
+        if any(f.startswith("consolidate:") for f in fr["flags"]):
+            consolidate_units += 1
         rows.append(row)
         if a.json:
             continue
-        if a.brief:  # the session-start line only carries what needs a decision now; untested and overdue wait for an audit
-            fr["flags"] = [f for f in fr["flags"] if f not in ("untested", "tests-overdue")]
+        if a.brief:  # the session-start line only carries what needs a decision now; untested and overdue wait for an audit,
+            # and a verify-at-use unit is news only when some of its claims are due
+            fr["flags"] = [f for f in fr["flags"] if f not in ("untested", "tests-overdue")
+                           and not (f == "verify-at-use" and not fr.get("claims_due"))]
         if a.brief and fr["status"] != "STALE" and not fr["flags"]:
             continue
         line = status_line(d, st, fr, verbose=a.checks)
@@ -1243,11 +1717,18 @@ def cmd_audit(a):
     if a.brief:
         if stale:
             print(f"[evergreen] {stale} unit(s) due for refresh. Do the user's task first, then run evergreen-refresh in this session.")
+        if claim_units:
+            print(f"[evergreen] {claim_units} verify-at-use unit(s) have volatile claims due: before relying on them, re-check the due "
+                  "ones (`evergreen.py claims <unit> --due`), then stamp them (`--stamp due`) and record `checked --use-time`.")
+        if consolidate_units:
+            print(f"[evergreen] learnings consolidation due in {consolidate_units} unit(s) (active entries past consolidate_every): "
+                  "after the user's task, run the consolidation pass (evergreen-learn).")
         if contribute_setting() is None:
             print("[evergreen] contribution not decided on this install: ask the user once, then run `evergreen.py contribute yes|no` (see `evergreen.py contribute`).")
         return
     print(f"-- {len(units)} unit(s), {stale} stale" + (f", {problems} problem(s)" if a.checks else "")
-          + (f", {failing} with failing tests" if failing else "") + f", home {evergreen_home()}")
+          + (f", {failing} with failing tests" if failing else "") + (f", {claim_units} with claims due" if claim_units else "")
+          + (f", {consolidate_units} due for consolidation" if consolidate_units else "") + f", home {evergreen_home()}")
     if not units:
         print("   (no units found; run `evergreen.py register <unit>` or `init`)")
     if a.strict and (stale or problems):
@@ -1273,6 +1754,111 @@ def cmd_checked(a):
     register(d, new)
     print(f"{new['name']}: interval {fmt_days(st.get('interval_days'))} -> {fmt_days(new.get('interval_days'))}, next_due {new.get('next_due')}, tier {new.get('tier')} | {rep}")
     maybe_notify(d, new, a)
+
+
+def cmd_claims(a):
+    """List a unit's volatile claims with their numbers and due flags; add one, or stamp some as re-checked today."""
+    d, st = load_state(a.unit)
+    now = datetime.now()
+    day = fmt_when(now)
+    claims = list(st.get("volatile_claims") or [])
+    notes, changed = [], False
+    if a.add:
+        text = " ".join(a.add.split())
+        if any(claim_text(c).strip() == text for c in claims):
+            notes.append(f"already listed: {text[:70]}")
+        elif text:
+            item = {"claim": text, "checked": day}
+            if a.recheck_days is not None:
+                item["recheck_days"] = a.recheck_days
+            claims.append(item)
+            changed = True
+            notes.append(f"added claim {len(claims)} (checked {day}; add it right after verifying it)")
+    if a.stamp:
+        spec = a.stamp.strip().lower()
+        if spec == "all":
+            idx = list(range(1, len(claims) + 1))
+        elif spec == "due":
+            idx = [i for i, c in enumerate(claims, 1) if claim_due(c, st, now)]
+        else:
+            idx = []
+            for part in spec.replace(" ", "").split(","):
+                if part.isdigit() and 1 <= int(part) <= len(claims):
+                    idx.append(int(part))
+                elif part:
+                    notes.append(f"no claim {part} (numbers run 1 to {len(claims)})")
+        for i in dict.fromkeys(idx):
+            c = claims[i - 1]
+            item = dict(c) if isinstance(c, dict) else {"claim": str(c)}  # a plain string becomes an object when stamped
+            item["checked"] = day
+            if a.recheck_days is not None:
+                item["recheck_days"] = a.recheck_days
+            claims[i - 1] = item
+        if idx:
+            changed = True
+            notes.append("stamped " + ", ".join(str(i) for i in dict.fromkeys(idx)) + f" (checked {day})")
+        elif spec in ("all", "due"):
+            notes.append("nothing to stamp")
+    if changed:
+        st["volatile_claims"] = claims
+        save_state(d, st)
+    rows = claims_view(st, now)
+    due = sum(1 for r in rows if r["due"])
+    shown = [r for r in rows if r["due"]] if a.due else rows
+    if a.json:
+        print(json.dumps({"unit": st.get("name"), "verify_at_use": bool(st.get("verify_at_use")), "due": due,
+                          "total": len(rows), "claims": shown, "notes": notes}, indent=2, ensure_ascii=False))
+        return
+    for n in notes:
+        print(n)
+    for r in shown:
+        when = f"checked {r['checked']}, due {r['next']}" if r["checked"] else "no date: due at every use"
+        print(f"{r['n']:>3}  {'DUE' if r['due'] else 'ok '}  {r['claim']}  [{when}]")
+    print(f"-- {st.get('name')}: {due} of {len(rows)} claim(s) due"
+          + ("" if st.get("verify_at_use") else "; verify_at_use is off, so Step 0 does not re-check them at use"))
+
+
+def cmd_search(a):
+    kinds = [k.strip() for k in (a.kinds or ",".join(SEARCH_KINDS)).split(",") if k.strip()]
+    bad = [k for k in kinds if k not in SEARCH_KINDS]
+    if bad:
+        print(f"unknown kind(s) {', '.join(bad)}; use {', '.join(SEARCH_KINDS)}")
+        kinds = [k for k in kinds if k in SEARCH_KINDS]
+    units = search_units(a.unit)
+    if not units:
+        print(f"no unit named {a.unit} in the registry" if a.unit else "no units to search: register one (evergreen.py register) or run from a unit folder")
+        return
+    docs = search_corpus(units, kinds)
+    hits = bm25(docs, a.query)[:max(1, a.n)]
+    if a.json:
+        print(json.dumps({"query": a.query, "units": len(units), "entries": len(docs),
+                          "hits": [{"score": round(s, 3), "unit": h["unit"], "id": h["id"], "kind": h["kind"],
+                                    "heading": entry_title(h["heading"]), "path": h["path"], "line": h["line"]} for s, h in hits]},
+                         indent=2, ensure_ascii=False))
+        return
+    for s, h in hits:
+        title = entry_title(h["heading"])
+        title = title if len(title) <= 90 else title[:87] + "..."
+        print(f"{s:6.2f}  {h['unit']}  {h['id']}  {title}  {h['path']}:{h['line']}")
+    print(f"-- {len(hits)} hit(s) in {len(docs)} entries of {len(units)} unit(s)" if hits
+          else f"-- no match in {len(docs)} entries of {len(units)} unit(s)")
+
+
+def cmd_eval_export(a):
+    d, st = load_state(a.unit)
+    if not (d / "evals" / "evals.json").exists():
+        print(f"{st.get('name')}: no evals/evals.json (run evergreen.py test-init first)")
+        return
+    out = Path(a.out).expanduser() if a.out else None
+    written, kept, notes = eval_export(d, out, force=a.force)
+    target = out or (d / "evals" / "cases")
+    print(f"{st.get('name')}: wrote {len(written)} case folder(s)" + (f" ({', '.join(written)})" if written else "")
+          + (f"; kept {len(kept)} existing ({', '.join(kept)}; --force rewrites them)" if kept else "") + f" in {target}")
+    for n in notes:
+        print("  - " + n)
+    if written:
+        print(f"  run: claude plugin eval <plugin root> --trust-plugin --no-publish --case \"<glob>\" --judge-model sonnet"
+              + ("" if out is None else f" --eval-dir <this folder, relative to the plugin root>"))
 
 
 EVENT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?):(.*?)(?::(\d+(?:\.\d+)?))?$")
@@ -1419,7 +2005,7 @@ def cmd_use_log(a):
                "transcript_path": payload.get("transcript_path"), "cwd": payload.get("cwd"), "env": env_default()}
         p = uses_path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
+        with p.open("a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         pass
@@ -1621,6 +2207,17 @@ def main(argv=None):
         s.add_argument("--note"); s.add_argument("--contradiction", action="store_true"); s.add_argument("--use-time", action="store_true")
         s.add_argument("--no-jitter", action="store_true"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards")
         s.set_defaults(fn=fn)
+    s = sp.add_parser("claims", parents=[common], help="a unit's volatile claims: numbers, due flags, stamping (PROTOCOL.md section 3)")
+    s.add_argument("unit"); s.add_argument("--due", action="store_true", help="list only the claims due for a re-check")
+    s.add_argument("--stamp", metavar="N,M|due|all", help="mark these claims re-checked today (a plain string becomes an object)")
+    s.add_argument("--add", metavar="CLAIM", help="append a claim you just verified (checked today)")
+    s.add_argument("--recheck-days", type=float, help="with --add or --stamp: that claim's own re-check interval in days")
+    s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_claims)
+    s = sp.add_parser("search", parents=[common], help="BM25 over the log entries of every registered unit")
+    s.add_argument("query"); s.add_argument("--unit", help="one unit: its registered name or its folder")
+    s.add_argument("--kinds", help="comma list of learnings, research, changes, tests (default: all four)")
+    s.add_argument("-n", type=int, default=5, help="hits to show (default 5)"); s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_search)
     s = sp.add_parser("flag", parents=[common]); s.add_argument("unit"); s.add_argument("--contradiction"); s.add_argument("--clear-contradiction", action="store_true")
     s.add_argument("--event", action="append"); s.add_argument("--clear-failing", nargs="*", metavar="ID", help="drop these case ids from tests.failing (none given: clear the list)")
     s.set_defaults(fn=cmd_flag)
@@ -1634,6 +2231,10 @@ def main(argv=None):
     s = sp.add_parser("tested", parents=[common], help="record a suite run"); s.add_argument("unit"); s.add_argument("--passed", type=int, default=0); s.add_argument("--failed", type=int, default=0)
     s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the hostname")
     s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards"); s.set_defaults(fn=cmd_tested)
+    s = sp.add_parser("eval-export", parents=[common], help="write `claude plugin eval` case folders (prompt.md + graders/) from evals/evals.json")
+    s.add_argument("unit"); s.add_argument("--out", help="folder for the cases (default: <unit>/evals/cases)")
+    s.add_argument("--force", action="store_true", help="rewrite case folders that already exist (they may have been tuned by hand)")
+    s.set_defaults(fn=cmd_eval_export)
     s = sp.add_parser("failed", parents=[common], help="record a failure seen in use and decide research-first or tune"); s.add_argument("unit"); s.add_argument("--case", required=True)
     s.add_argument("--class", dest="cls", required=True, choices=FAILURE_CLASSES); s.add_argument("--note"); s.set_defaults(fn=cmd_failed)
     s = sp.add_parser("use-log", parents=[common], help="PostToolUse hook body: log a Skill use from the JSON payload on stdin"); s.add_argument("--file", help="read the payload from a file instead of stdin"); s.set_defaults(fn=cmd_use_log)

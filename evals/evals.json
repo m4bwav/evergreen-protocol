@@ -33,6 +33,24 @@
       "baseline": "2026-09-13 claude plugin eval, no plugin: 0/3 fired"
     },
     {
+      "id": "trigger-4",
+      "kind": "trigger",
+      "prompt": "No, the build box's Python is /opt/py311/bin/python3, not the system python. I've told you that before. Make sure that sticks for next time.",
+      "expectations": [
+        "the evergreen-learn skill is invoked (a correction the user has given before, and an environment fact)"
+      ],
+      "runs": 3
+    },
+    {
+      "id": "trigger-5",
+      "kind": "trigger",
+      "prompt": "Quick status check before I start: which of my skills are stale or due for a refresh, and are any of them failing their tests?",
+      "expectations": [
+        "the evergreen-audit skill is invoked"
+      ],
+      "runs": 3
+    },
+    {
       "id": "decoy-1",
       "kind": "trigger",
       "decoy": true,
