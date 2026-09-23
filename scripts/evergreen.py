@@ -296,8 +296,8 @@ def register(unit: Path, st: dict) -> None:
     entry = {"name": st.get("name"), "path": path, "kind": st.get("kind"), "tier": st.get("tier"), "source": st.get("source")}
     reg["units"] = [u for u in reg["units"] if u.get("path") != path]
     reg["units"].append(entry)
-    if st.get("kind") == "plugin":
-        reg["plugin_root"] = path  # what `protocol: "plugin"` units resolve to
+    if st.get("kind") == "plugin" and (unit / "scripts" / "evergreen.py").exists() and (unit / "protocol" / "PROTOCOL.md").exists():
+        reg["plugin_root"] = path  # what `protocol: "plugin"` units resolve to; only the evergreen plugin itself, never another plugin unit (L-024)
     save_registry(reg)
 
 

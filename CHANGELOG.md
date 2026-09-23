@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260923-16 · 2026-09-23 · Version 0.9.1: only the evergreen plugin itself becomes the registry's `plugin_root`
+- because: L-024 (a `checked` on another plugin unit, dandy and then everlast, repointed `plugin_root` away from the evergreen plugin)
+- files: scripts/evergreen.py (`register`), scripts/test_evergreen.py (`test_register_sets_plugin_root_only_for_the_evergreen_plugin`), .claude-plugin/plugin.json (0.9.1)
+- `register` sets `plugin_root` only when the unit's folder holds `scripts/evergreen.py` and `protocol/PROTOCOL.md`. Other plugin units still register as units. An install whose registry already points elsewhere is repaired by the next `checked` on the evergreen plugin, or by editing `plugin_root` in `registry.json`.
+
 ### C-20260923-15 · 2026-09-23 · `evergreen.py eval-export`: `claude plugin eval` case folders written from `evals/evals.json`
 - because: R-20260923-7 (the harness is documented and preferred, and its case format is separate from `evals.json`); T-20260923-3; the open question on keeping both by hand, now resolved
 - files: scripts/evergreen.py (`eval-export` command; `eval_export`, `export_case`, `case_skill`, `skill_input_match`), scripts/test_evergreen.py (`test_eval_export_writes_plugin_eval_case_folders`), protocol/TESTING.md (§3, §6), skills/evergreen-test (Step 3), README.md (§What you get, §Using the scripts), RESEARCH.md (the open question resolved), TESTS.md (T-20260923-3)

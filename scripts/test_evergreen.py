@@ -294,6 +294,20 @@ class Scaffold(unittest.TestCase):
         self.assertEqual(st["history"][-1]["note"], "big change")
         self.assertEqual(st["counts"]["research"], 1)
 
+    def test_register_sets_plugin_root_only_for_the_evergreen_plugin(self):
+        reg = eg.load_registry(); reg["plugin_root"] = "sentinel"; eg.save_registry(reg)
+        other = Path(self.tmp.name) / "otherplugin"
+        other.mkdir()
+        eg.register(other, {"name": "other", "kind": "plugin", "tier": "fast"})
+        self.assertEqual(eg.load_registry()["plugin_root"], "sentinel")
+        me = Path(self.tmp.name) / "evergreenlike"
+        (me / "scripts").mkdir(parents=True)
+        (me / "scripts" / "evergreen.py").write_text("", encoding="utf-8")
+        (me / "protocol").mkdir()
+        (me / "protocol" / "PROTOCOL.md").write_text("", encoding="utf-8")
+        eg.register(me, {"name": "evergreen", "kind": "plugin", "tier": "fast"})
+        self.assertEqual(eg.load_registry()["plugin_root"], str(me.resolve()))
+
     def test_map_init_creates_codemap_unit(self):
         repo = Path(self.tmp.name) / "repo"
         repo.mkdir()

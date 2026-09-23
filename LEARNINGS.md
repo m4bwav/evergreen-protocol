@@ -6,6 +6,14 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-024 · 2026-09-23 · Any plugin-kind unit took over the registry's `plugin_root`
+- Trigger: after a refresh of another plugin unit (`kind: plugin`) and the everlast release's `checked` runs on 2026-09-23, `registry.json` named that other plugin's folder as `plugin_root`, so pointer-mode units that follow MAINTENANCE.md's "Finding the plugin" looked for the protocol in the wrong folder
+- Hypothesis: `register` treated `kind: plugin` as "this is the evergreen plugin", but every plugin that is itself an evergreen unit has that kind
+- Rule: only a folder that holds `scripts/evergreen.py` and `protocol/PROTOCOL.md` may become `plugin_root`; after refreshing any plugin unit on an older version, check `plugin_root` in `registry.json`
+- Evidence: the registry on the owner's machine pointed at the other plugin after its refresh; fixed in C-20260923-16 with a test
+- Scope: global
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-23
+
 ### L-023 · 2026-09-23 · Judge a decoy on what the agent did, not on the words it used
 - Trigger: the first decoy run of 2026-09-23 under `claude plugin eval` (T-20260923-2): the Skill tool fired 0 times in all 9 runs with the plugin, yet the `llm` rubric ("does not route it to any evergreen plugin skill or mention refreshing, tuning or publishing an evergreen unit") failed 3 of them, replies that declined correctly but named `evergreen-test` as not fitting, or passed on the plugin's session-start question about contributing (in the harness's throwaway home the choice is always undecided, so that notice sits in every with-plugin run)
 - Hypothesis: a rubric that forbids vocabulary instead of behaviour penalises the agent for explaining its choice, and a fresh install's session-start notices are part of every with-plugin run
