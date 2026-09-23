@@ -8,7 +8,7 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
-### T-20260923-4 · 2026-09-23 · scripts/test_evergreen.py after the 1.11 steps; scripts/bench_intervals.py sweep of twenty candidate step sizes · DESKTOP-7KS2S6E · 76/76
+### T-20260923-4 · 2026-09-23 · scripts/test_evergreen.py after the 1.11 steps; scripts/bench_intervals.py sweep of twenty candidate step sizes · owner-pc · 76/76
 - Self-test: 76 cases pass after the interval-rule cases were rewritten for the new steps (quiet walk 30 → 37.5 → 46.88 → 58.6 → 73.25 → 90; a shake-up halves and a change cuts by a third; promotion on one major change only below the floor; live 6 h → 7.5 h; jitter band around 37.5). `--rule major_div=4,change_div=2,quiet_mul=1.5` reproduces T-20260923-1's table to the decimal.
 - Benchmark, seeds 1 to 3, 730 days, 25 units per class; checks per year summed over the seven middle classes (7d, 14d, 30d, 60d, 120d, shift, burst), the share of time holding a stale material claim and the days to see a material change averaged over them, and the gap to even spacing at the same count:
 
