@@ -19,9 +19,9 @@ Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `f
 - files: evals/evals.json (trigger-4, trigger-5), evals/cases/trigger-4 and evals/cases/trigger-5 (prompt.md, graders/fires.md, graders/outcome.md), evals/cases/decoy-1, decoy-2 and decoy-3 (graders/outcome.md), TESTS.md (T-20260923-2), LEARNINGS.md (L-023; L-019 updated)
 - Triggers 18 of 18 runs with the plugin and 0 of 18 without; decoys quiet 18 of 18. The action and outcome cases were not run this time: the action cases grant Bash, which the harness refuses on native Windows (L-019), and no edit changed the actions they exercise.
 
-### C-20260923-11 · 2026-09-23 · Publish commit messages keep the first changed path whole
-- because: L-022
-- files: scripts/evergreen_sync.py (`changed_paths` parses the porcelain status columns with `PORCELAIN_RE`), scripts/test_evergreen.py (`test_changed_paths_keep_the_first_path_whole`), LEARNINGS.md (L-022)
+### C-20260923-11 · 2026-09-23 · Merge and publish hygiene: commit messages keep the first changed path whole, and lint reports a duplicate entry ID
+- because: L-022; `.gitattributes` and PROTOCOL §10 said `lint` reports a duplicate ID after a union merge, and it did not: a merge of this release into a scratch clone of the owner's private fork produced one (the fork relabels the heading of T-20260913-1 with its host name, and an entry inserted just above that heading makes the union driver keep both copies)
+- files: scripts/evergreen_sync.py (`changed_paths` parses the porcelain status columns with `PORCELAIN_RE`), scripts/evergreen.py (`check_links` reports an entry ID defined twice in one file), scripts/test_evergreen.py (`test_changed_paths_keep_the_first_path_whole`, `test_duplicate_entry_ids_after_a_union_merge_are_reported`), LEARNINGS.md (L-022)
 - The file list in a publish commit comes from `git status --porcelain`; the shared `git()` helper strips its output, so a first line " M LEARNINGS.md" became "M LEARNINGS.md" and a fixed slice cut it to "EARNINGS.md". Staging was never affected (`git add -A`).
 
 ### C-20260923-10 · 2026-09-23 · AGENTS.md in Claude Code 2.1.277: keep the `@AGENTS.md` import; a prose pointer loads nothing

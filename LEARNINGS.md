@@ -36,7 +36,7 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 - Rule: keep every committed text file LF (`*.sh text eol=lf` on top of `* -text`, the whole tree normalised once), let `shipped_bytes` and `export` normalise `.sh` regardless, keep the test that asserts the hook has no `\r`, and let CI on a second operating system be the proof (C-20260917-2); an agent writing files on Windows passes `newline="\n"` or writes bytes, and so do the scripts (`write_lf` in evergreen.py writes bytes, because `Path.write_text(newline=)` is Python 3.10+)
 - Evidence: C-20260917-2; the portability audit of 2026-09-17; test_sh_hook_is_lf_everywhere; C-20260923-13 and test_state_and_scaffold_files_are_written_lf
 - Scope: global
-- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-23
+- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-17
 
 ### L-019 · 2026-09-13 · On Windows `claude plugin eval` refuses any case that grants a shell tool, and repeated `--case` flags keep only the last one
 - Trigger: the first full run of the plugin's suite (T-20260913-1): all 60 runs errored with "A shell tool (Bash or PowerShell) was granted but this machine cannot confine it (no sandbox backend on this platform)", even though `--allow-tools Bash` was passed; the rerun with `--case "trigger-*" --case "decoy-*" --case "outcome-*"` executed only outcome-1. On 2026-09-23 (2.1.280, T-20260923-2) `--case "trigger-[2-5]"` and `--case "trigger-{2,3,4,5}"` both answered "No eval cases found".

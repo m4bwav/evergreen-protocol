@@ -893,8 +893,11 @@ def check_links(d: Path, st: dict) -> list[str]:
     if "main" in texts and "evergreen" not in texts["main"].lower():
         problems.append(f"{names['main']} never mentions evergreen (add the Maintenance section)")
     defined, referenced = set(), set()
-    for txt in texts.values():
-        defined |= set(DEF_RE.findall(txt))
+    for k, txt in texts.items():
+        heads = DEF_RE.findall(txt)
+        for rid in sorted({h for h in heads if heads.count(h) > 1}):  # the union merge driver keeps both sides (.gitattributes)
+            problems.append(f"{names[k]}: {rid} is defined {heads.count(rid)} times (a union merge kept both copies; renumber or remove one)")
+        defined |= set(heads)
         referenced |= set(ID_RE.findall(txt))
     arch_txt = ""
     for arch in d.glob("*-ARCHIVE.md"):

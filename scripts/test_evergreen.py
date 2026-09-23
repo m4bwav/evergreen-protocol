@@ -577,6 +577,18 @@ class Scaffold(unittest.TestCase):
         st["tier"] = "none"
         self.assertIn("tune directly", eg.research_verdict(st, "no-op"))
 
+    def test_duplicate_entry_ids_after_a_union_merge_are_reported(self):
+        d = Path(self.tmp.name) / "dup"
+        eg.main(["init", str(d), "--name", "dup", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        _, st = eg.load_state(d)
+        self.assertEqual([p for p in eg.check_links(d, st) if "defined" in p and "times" in p], [])
+        tp = d / "TESTS.md"
+        run = "### T-20260913-1 · 2026-09-13 · manual · {env} · 1/1\n- led to: none\n\n"
+        tp.write_text(tp.read_text(encoding="utf-8").replace("## Runs\n\n", "## Runs\n\n" + run.format(env="a-fork-host") + run.format(env="owner-pc"), 1),
+                      encoding="utf-8")
+        self.assertIn("TESTS.md: T-20260913-1 is defined 2 times (a union merge kept both copies; renumber or remove one)",
+                      eg.check_links(d, st))
+
     def test_t_ids_are_checked_like_the_other_ids(self):
         self.assertEqual(eg.ID_RE.findall("fixed by T-20260904-1, see C-20260904-2 and other:T-20260904-3"), ["T-20260904-1", "C-20260904-2"])
         d = Path(self.tmp.name) / "tid"
