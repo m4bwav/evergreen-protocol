@@ -8,6 +8,11 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20260923-3 · 2026-09-23 · claude plugin eval 2.1.280 on cases written by `evergreen.py eval-export`, one run each; trigger-2 rerun · owner-pc · 3/3
+- `eval-export . --out evals-export-probe` wrote all 12 cases of this plugin's suite; through `--eval-dir evals-export-probe`, the exported trigger-4 fired evergreen-learn (its `input_match` is the exact pattern the docs give for a Skill call, and it matched) and the exported decoy-2 kept every evergreen skill quiet with and without the plugin. The probe folder was deleted afterwards; the hand-tuned `evals/cases/` stay as they are.
+- trigger-2 (evergreen-test) rerun after its Step 3 named `eval-export`: 3 of 3 with the plugin, 0 of 3 without.
+- led to: C-20260923-15
+
 ### T-20260923-2 · 2026-09-23 · claude plugin eval 2.1.280 (trigger and decoy cases, sonnet judge, --no-publish) · owner-pc · 9/9
 - Trigger 6/6 (trigger-1 tune, trigger-2 test, trigger-3 refresh, trigger-4 learn, new, trigger-5 audit, new, trigger-6 publish): the Skill tool fired with the matching skill in 3 of 3 runs each with the plugin and 0 of 3 without (18 of 18 against 0 of 18); the judge passed every routing reply. Decoys 3/3 on the rerun: the Skill tool fired 0 times in 9 of 9 runs with the plugin and 9 of 9 without, 18 of 18 quiet runs with the plugin across both decoy runs.
 - decoy-1 and decoy-3 · trigger · harness · the first decoy run failed 1 and 2 of 3 with-plugin runs on the `llm` grader only: the replies declined correctly but named `evergreen-test` as not fitting, or passed on the plugin's session-start question about contributing (always undecided in the harness's throwaway home). The rubric forbade words, not behaviour; rewritten (L-023), rerun 3/3.

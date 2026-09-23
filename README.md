@@ -24,7 +24,7 @@ This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the eviden
 | `skills/evergreen-diff` | What this clone changed and has not yet published: digest plus unified diff against its baseline. |
 | `skills/evergreen-notify` | The email fallback for a machine that cannot reach the repository: bundle, transport ladder (Outlook, Graph, Gmail SMTP, a mail connector, Chrome), outbox. |
 | `agents/` | `evergreen-researcher` (research pass in its own context), `evergreen-mapper` (repo sweep), `evergreen-tester` (one eval case in a fresh context, strict trace report). |
-| `scripts/evergreen.py` | State, scheduling, scaffolding, audit, link and lint checks (typed `Related:` lines included), volatile claims with their own check dates (`claims`), search by meaning over every unit's log entries (`search`, BM25), test records (`test-init`, `tested`, `failed`), the use log (`use-log`, `uses`), export, pack. Stdlib only. `evergreen_sync.py` adds publish, pull, where, baseline, diff, and the email fallback (notify, merge). `test_evergreen.py` covers the math, the tests layer, the sync and the new commands. `pack.ps1` packages without Python. |
+| `scripts/evergreen.py` | State, scheduling, scaffolding, audit, link and lint checks (typed `Related:` lines included), volatile claims with their own check dates (`claims`), search by meaning over every unit's log entries (`search`, BM25), test records (`test-init`, `tested`, `failed`) and `claude plugin eval` case folders written from `evals.json` (`eval-export`), the use log (`use-log`, `uses`), export, pack. Stdlib only. `evergreen_sync.py` adds publish, pull, where, baseline, diff, and the email fallback (notify, merge). `test_evergreen.py` covers the math, the tests layer, the sync and the new commands. `pack.ps1` packages without Python. |
 | `scripts/bench_intervals.py` | A deterministic benchmark of the refresh schedule: the real interval rule, imported, against fixed and per-class schedules and an oracle on synthetic units; prints a markdown table (see Testing). |
 | `templates/` | Companion-file templates (including `TESTS.md` and `evals.json`), the pointer and standalone `MAINTENANCE.md` forms, and snippets for `AGENTS.md`, `CLAUDE.md`, `copilot-instructions.md`. |
 | `profile/` | Portable preferences (`AI-PREFERENCES.md`) and environment facts (`ENVIRONMENTS.md`). Learnings-driven, no web research. |
@@ -85,6 +85,7 @@ python scripts/evergreen.py map-init <repo>         # codemap unit in the store
 python scripts/evergreen.py drift <map> [--update-sha]
 python scripts/evergreen.py links <unit>  |  lint <unit>  |  flag <unit> --contradiction "why"   # lint also checks typed Related: lines
 python scripts/evergreen.py test-init <unit>       # add evals/evals.json, TESTS.md and the tests block to an existing skill
+python scripts/evergreen.py eval-export <unit> [--out <dir>] [--force]   # write `claude plugin eval` case folders from evals/evals.json
 python scripts/evergreen.py tested <unit> --passed 5 --failed 1 --failing action-1 --harness tester --note "..."
 python scripts/evergreen.py failed <unit> --case action-1 --class no-op --note "..."   # failure in use; says whether research comes first
 python scripts/evergreen.py uses [--skill x] [--days 7]   # recent skill invocations from the use log (Claude Code hook)

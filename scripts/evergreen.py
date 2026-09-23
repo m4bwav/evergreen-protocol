@@ -25,6 +25,7 @@ Commands
   tested  <unit> --passed N --failed N [--failing id,id] [--harness H] [--env E] [--note ..]
                                     record a suite run; prints the next T- id for TESTS.md
   failed  <unit> --case ID --class CLASS [--note ..]   record a failure seen in use; says whether research is due first
+  eval-export <unit> [--out DIR] [--force]   write `claude plugin eval` case folders from evals/evals.json
   use-log                           PostToolUse hook body (stdin JSON): append a Skill use to EVERGREEN_HOME/uses.jsonl
   uses    [--skill NAME] [--days 7] [--limit 20] [--json]   recent skill uses, newest first
   map-slug <repo>                   slug for a repo path
@@ -1261,6 +1262,131 @@ def entry_title(heading: str) -> str:
     return re.sub(r"^\S+\s*·\s*\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?\s*·\s*", "", heading).strip()
 
 
+# ---------- eval-export: evals.json -> `claude plugin eval` case folders (TESTING.md section 6) ----------
+# evals.json stays canonical; the harness reads one folder per case, `prompt.md` plus `graders/*.md`. Existing case
+# folders are kept (they may have been tuned by hand) unless --force. The harness has no code graders, so a
+# `command` evidence has no counterpart here and stays with the tester agent.
+
+READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Skill"]
+TRIGGER_SUFFIX = ("(For this run: start the job, and stop after the first two or three tool calls with a one-line note of "
+                  "which skill you invoked and what you would do next.)")
+DECOY_SUFFIX = ("(For this run: say in two or three lines how you would approach it and which tools or skills you would use; "
+                "do not carry it out.)")
+
+
+def _yaml_str(s: str) -> str:
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def _grader(fields: list[tuple[str, str]], body: str = "") -> str:
+    return "---\n" + "".join(f"{k}: {v}\n" for k, v in fields) + "---\n\n" + (body.strip() + "\n" if body.strip() else "")
+
+
+def case_skill(case: dict, data: dict) -> str:
+    """The skill a case is about: its own `skill` field, else the name in 'the X skill is invoked', else the suite's."""
+    if case.get("skill"):
+        return str(case["skill"])
+    for e in case.get("expectations") or []:
+        for m in re.finditer(r"\b([a-z0-9][a-z0-9:-]*)\s+skill\b", str(e)):
+            if m.group(1) not in ("the", "a", "an", "no", "any", "this", "that"):
+                return m.group(1)
+    return str(data.get("skill") or "")
+
+
+def skill_input_match(name: str, exact: bool = True) -> str:
+    """The Skill tool's input as the harness encodes it, with or without a `plugin:` prefix (plugin-evals docs).
+    exact=False matches every skill whose name starts with `name` (a decoy must keep a whole plugin quiet)."""
+    return '"skill"\\s*:\\s*"(?:[\\w-]+:)?' + re.escape(name).replace('\\-', '-') + ('"' if exact else '')
+
+
+def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]:
+    """(prompt.md text, {grader file: text}, notes) for one evals.json case."""
+    kind, notes = str(case.get("kind") or "trigger"), []
+    skill = case_skill(case, data)
+    runs = int(case.get("runs") or 3)
+    prompt = str(case.get("prompt") or "").strip()
+    graders: dict[str, str] = {}
+    if kind == "action":
+        tools, turns, timeout = READ_ONLY_TOOLS + ["Bash", "Write", "Edit"], 25, 600
+        ev = case.get("evidence") or {}
+        t = str(ev.get("type") or "")
+        path = str(ev.get("path") or "")
+        if t == "trace" and ev.get("tool"):
+            fields = [("type", "tool_used"), ("name", _yaml_str("evidence: " + str(ev["tool"]) + " called")), ("tool", str(ev["tool"]))]
+            if ev.get("input_match"):
+                fields.append(("input_match", _yaml_str(ev["input_match"])))
+            graders["evidence.md"] = _grader(fields + [("min", "1"), ("arm", "both")])
+        elif t in ("file", "marker") and path and "<" not in path:
+            graders["evidence.md"] = _grader([("type", "file_exists"), ("name", _yaml_str("evidence: " + path)), ("path", _yaml_str(path)),
+                                              ("exists", "true"), ("arm", "both")])
+        elif t == "log" and path and "<" not in path and ev.get("pattern"):
+            graders["evidence.md"] = _grader([("type", "regex"), ("name", _yaml_str("evidence: log line")),
+                                              ("target", "{source: file, path: " + _yaml_str(path) + "}"),
+                                              ("pattern", _yaml_str(ev["pattern"])), ("match", "contains"), ("arm", "both")])
+        else:
+            notes.append(f"{case.get('id')}: evidence type {t or 'none'} has no plugin-eval grader here (no code graders, "
+                         "or a placeholder path); keep the tester agent for it")
+        alt = ev.get("or") if isinstance(ev.get("or"), dict) else None
+        if alt:
+            notes.append(f"{case.get('id')}: the alternative evidence ({alt.get('type')}) is not exported; graders are all required")
+        notes.append(f"{case.get('id')}: grants Bash, Write and Edit (pass --allow-tools; on native Windows run it under WSL2)")
+    else:
+        tools, turns, timeout = list(READ_ONLY_TOOLS), 8, 240
+        if case.get("decoy"):
+            prompt += "\n\n" + DECOY_SUFFIX
+            graders["quiet.md"] = _grader([("type", "tool_used"), ("name", _yaml_str(f"{skill or 'the skill'} stays quiet")), ("tool", "Skill")]
+                                          + ([("input_match", _yaml_str(skill_input_match(skill, exact=False)))] if skill else [])
+                                          + [("min", "0"), ("max", "0"), ("arm", "both")])
+        elif kind == "trigger":
+            prompt += "\n\n" + TRIGGER_SUFFIX
+            if not skill:
+                notes.append(f"{case.get('id')}: no skill name found (add \"skill\" to the case); the grader checks any Skill call")
+            graders["fires.md"] = _grader([("type", "tool_used"), ("name", _yaml_str(f"{skill or 'a skill'} invoked")), ("tool", "Skill")]
+                                          + ([("input_match", _yaml_str(skill_input_match(skill)))] if skill else [])
+                                          + [("min", "1"), ("arm", "both")])
+        if kind == "outcome":
+            judged = []
+            for i, e in enumerate(case.get("expectations") or [], 1):
+                m = re.match(r"^\s*regex(?: on the (?:answer|reply|output))?\s*:\s*(.+)$", str(e), flags=re.I)
+                if m:
+                    graders[f"regex-{i}.md"] = _grader([("type", "regex"), ("name", _yaml_str(f"expectation {i}")),
+                                                        ("pattern", _yaml_str(m.group(1).strip())), ("flags", "i"),
+                                                        ("match", "contains"), ("arm", "both")])
+                else:
+                    judged.append(str(e))
+            if judged:
+                graders["judge.md"] = _grader([("type", "llm"), ("name", _yaml_str("expectations"))],
+                                              "PASS if the reply meets every one of these:\n" + "\n".join(f"- {j}" for j in judged)
+                                              + "\nFAIL if any is missing or contradicted.")
+    head = f"---\nmax_turns: {turns}\ntimeout_seconds: {timeout}\nallowed_tools: [{', '.join(tools)}]\nruns: {runs}\n---\n\n"
+    return head + prompt + "\n", graders, notes
+
+
+def eval_export(d: Path, out: Path | None = None, force: bool = False) -> tuple[list[str], list[str], list[str]]:
+    """Write one case folder per evals.json case. Returns (written ids, kept ids, notes)."""
+    data = json.loads((d / "evals" / "evals.json").read_text(encoding="utf-8"))
+    cases = [c for c in (data.get("evals") if isinstance(data, dict) else data) or [] if isinstance(c, dict)]
+    out = out or (d / "evals" / "cases")
+    written, kept, notes = [], [], []
+    for c in cases:
+        cid = re.sub(r"[^A-Za-z0-9._-]+", "-", str(c.get("id") or "")).strip("-")
+        if not cid or "TODO" in str(c.get("prompt") or ""):
+            notes.append(f"{cid or '(no id)'}: skipped (no id, or a TODO prompt)")
+            continue
+        cdir = out / cid
+        if (cdir / "prompt.md").exists() and not force:
+            kept.append(cid)
+            continue
+        prompt, graders, n = export_case(c, data)
+        notes += n
+        (cdir / "graders").mkdir(parents=True, exist_ok=True)
+        write_lf(cdir / "prompt.md", prompt)
+        for name, text in graders.items():
+            write_lf(cdir / "graders" / name, text)
+        written.append(cid)
+    return written, kept, notes
+
+
 # ---------- packaging ----------
 
 def plugin_version() -> str:
@@ -1718,6 +1844,23 @@ def cmd_search(a):
           else f"-- no match in {len(docs)} entries of {len(units)} unit(s)")
 
 
+def cmd_eval_export(a):
+    d, st = load_state(a.unit)
+    if not (d / "evals" / "evals.json").exists():
+        print(f"{st.get('name')}: no evals/evals.json (run evergreen.py test-init first)")
+        return
+    out = Path(a.out).expanduser() if a.out else None
+    written, kept, notes = eval_export(d, out, force=a.force)
+    target = out or (d / "evals" / "cases")
+    print(f"{st.get('name')}: wrote {len(written)} case folder(s)" + (f" ({', '.join(written)})" if written else "")
+          + (f"; kept {len(kept)} existing ({', '.join(kept)}; --force rewrites them)" if kept else "") + f" in {target}")
+    for n in notes:
+        print("  - " + n)
+    if written:
+        print(f"  run: claude plugin eval <plugin root> --trust-plugin --no-publish --case \"<glob>\" --judge-model sonnet"
+              + ("" if out is None else f" --eval-dir <this folder, relative to the plugin root>"))
+
+
 EVENT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?):(.*?)(?::(\d+(?:\.\d+)?))?$")
 
 
@@ -2088,6 +2231,10 @@ def main(argv=None):
     s = sp.add_parser("tested", parents=[common], help="record a suite run"); s.add_argument("unit"); s.add_argument("--passed", type=int, default=0); s.add_argument("--failed", type=int, default=0)
     s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the hostname")
     s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards"); s.set_defaults(fn=cmd_tested)
+    s = sp.add_parser("eval-export", parents=[common], help="write `claude plugin eval` case folders (prompt.md + graders/) from evals/evals.json")
+    s.add_argument("unit"); s.add_argument("--out", help="folder for the cases (default: <unit>/evals/cases)")
+    s.add_argument("--force", action="store_true", help="rewrite case folders that already exist (they may have been tuned by hand)")
+    s.set_defaults(fn=cmd_eval_export)
     s = sp.add_parser("failed", parents=[common], help="record a failure seen in use and decide research-first or tune"); s.add_argument("unit"); s.add_argument("--case", required=True)
     s.add_argument("--class", dest="cls", required=True, choices=FAILURE_CLASSES); s.add_argument("--note"); s.set_defaults(fn=cmd_failed)
     s = sp.add_parser("use-log", parents=[common], help="PostToolUse hook body: log a Skill use from the JSON payload on stdin"); s.add_argument("--file", help="read the payload from a file instead of stdin"); s.set_defaults(fn=cmd_use_log)

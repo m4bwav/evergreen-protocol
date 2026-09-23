@@ -852,6 +852,54 @@ class Scaffold(unittest.TestCase):
         self.assertFalse(any("One-line lesson" in h["heading"] for h in hits), hits)
         self.assertEqual([len(eg.split_entries("# T\n\nEntry shape: `### C-YYYYMMDD-n · date · x`\n\n## Log\n"))], [0])
 
+    def test_eval_export_writes_plugin_eval_case_folders(self):
+        d = Path(self.tmp.name) / "exp-skill"
+        eg.main(["init", str(d), "--name", "exp-skill", "--topic", "t", "--standalone"])
+        self.assertIn("skipped (no id, or a TODO prompt)", capture(["eval-export", str(d)]))  # the template's TODO cases
+        suite = {"skill": "exp-skill", "evals": [
+            {"id": "trigger-1", "kind": "trigger", "prompt": "Render the scene on the Mac", "expectations": ["the exp-skill skill is invoked"], "runs": 3},
+            {"id": "decoy-1", "kind": "trigger", "decoy": True, "prompt": "Fix the bug in worker.py", "expectations": ["the exp-skill skill is not invoked"]},
+            {"id": "action-1", "kind": "action", "prompt": "Delegate the render", "evidence": {"type": "trace", "tool": "Bash", "input_match": "ssh\\s+mac",
+                                                                                                 "or": {"type": "file", "path": "out.png"}}},
+            {"id": "action-2", "kind": "action", "prompt": "Write the report", "evidence": {"type": "file", "path": "report.md"}},
+            {"id": "action-3", "kind": "action", "prompt": "Check the queue", "evidence": {"type": "command", "run": "curl x", "expect": "ok"}},
+            {"id": "outcome-1", "kind": "outcome", "prompt": "What passes a test?", "expectations": ["names evidence outside the transcript",
+                                                                                                    "regex on the answer: (evidence|trace).*(never|not)"]},
+        ]}
+        (d / "evals" / "evals.json").write_text(json.dumps(suite), encoding="utf-8")
+        out = capture(["eval-export", str(d)])
+        self.assertIn("wrote 6 case folder(s)", out)
+        self.assertIn("action-3: evidence type command has no plugin-eval grader", out)
+        self.assertIn("action-1: the alternative evidence (file) is not exported", out)
+        cases = d / "evals" / "cases"
+        p = (cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8")
+        self.assertTrue(p.startswith("---\nmax_turns: 8\ntimeout_seconds: 240\nallowed_tools: [Read, Glob, Grep, Skill]\nruns: 3\n---\n\nRender the scene on the Mac"))
+        fires = (cases / "trigger-1" / "graders" / "fires.md").read_text(encoding="utf-8")
+        self.assertIn("type: tool_used\n", fires)
+        self.assertIn("input_match: '\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?exp-skill\"'", fires)
+        quiet = (cases / "decoy-1" / "graders" / "quiet.md").read_text(encoding="utf-8")
+        self.assertIn("min: 0\nmax: 0\narm: both\n", quiet)
+        self.assertIn("(?:[\\w-]+:)?exp-skill'", quiet)  # a prefix: every skill of that name family stays quiet
+        self.assertIn("allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]", (cases / "action-1" / "prompt.md").read_text(encoding="utf-8"))
+        self.assertIn("tool: Bash\ninput_match: 'ssh\\s+mac'\nmin: 1", (cases / "action-1" / "graders" / "evidence.md").read_text(encoding="utf-8"))
+        self.assertIn("type: file_exists\n", (cases / "action-2" / "graders" / "evidence.md").read_text(encoding="utf-8"))
+        self.assertFalse((cases / "action-3" / "graders").exists() and any((cases / "action-3" / "graders").iterdir()))
+        self.assertIn("pattern: '(evidence|trace).*(never|not)'", (cases / "outcome-1" / "graders" / "regex-2.md").read_text(encoding="utf-8"))
+        self.assertIn("- names evidence outside the transcript", (cases / "outcome-1" / "graders" / "judge.md").read_text(encoding="utf-8"))
+        self.assertNotIn(b"\r", (cases / "outcome-1" / "graders" / "judge.md").read_bytes())
+        # hand-tuned folders are kept unless --force
+        (cases / "trigger-1" / "prompt.md").write_text("tuned by hand\n", encoding="utf-8")
+        self.assertIn("kept 6 existing", capture(["eval-export", str(d)]))
+        self.assertEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
+        capture(["eval-export", str(d), "--force"])
+        self.assertNotEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
+        # the plugin's own suite: the skill comes from each case's expectations, and a plugin-wide decoy uses the suite name
+        o = Path(self.tmp.name) / "plugin-cases"
+        written, kept, _ = eg.eval_export(eg.plugin_root(), o)
+        self.assertIn("trigger-4", written)
+        self.assertIn("evergreen-learn\"'", (o / "trigger-4" / "graders" / "fires.md").read_text(encoding="utf-8"))
+        self.assertIn("(?:[\\w-]+:)?evergreen'", (o / "decoy-2" / "graders" / "quiet.md").read_text(encoding="utf-8"))
+
     def test_bench_intervals_smoke(self):
         import bench_intervals as bi
         res = bi.run(seed=3, days=120, units=2)
