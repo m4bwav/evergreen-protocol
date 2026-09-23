@@ -35,6 +35,9 @@ Return exactly this structure, nothing else:
 ## Tracks covered: <subject: n queries · tooling: n · practice: n · testing: n>
 ## Upcoming events: <date · label>, or none
 ## Nothing changed: <yes/no, with one sentence if yes>
+## Cost: searches <n> · fetches <n> · tool calls <n>
 ```
+
+Always end with the cost line: count your own WebSearch calls, WebFetch calls and all tool calls of this pass. The caller writes it into the unit's history so every refresh records what it spent. It is a record, not a budget: never cut a track short to lower it.
 
 Be concrete and cite. Under 1000 words. If searches fail, say so explicitly and return what you have. A quiet tooling or testing track ("nothing built for this yet", "no checker beyond reading the output") is a finding worth one line, so the next refresh knows the baseline.

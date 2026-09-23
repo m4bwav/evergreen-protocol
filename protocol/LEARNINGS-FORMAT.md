@@ -1,6 +1,6 @@
 # Learnings Format
 
-Part of the [Evergreen Protocol](PROTOCOL.md). A learning is a procedural lesson: something that, had it been known, would have prevented a mistake or a repeated explanation. Learnings are the raw material from which the main file improves (PROTOCOL.md §6). Evidence for the format: [../RESEARCH.md](../RESEARCH.md) R-20260901-1 and R-20260901-3.
+Part of the [Evergreen Protocol](PROTOCOL.md). A learning is a procedural lesson: something that, had it been known, would have prevented a mistake or a repeated explanation. Learnings are the raw material from which the main file improves (PROTOCOL.md §6). Evidence for the format: [../RESEARCH.md](../RESEARCH.md) R-20260901-1, R-20260901-3 and R-20260923-8.
 
 ## Entry
 
@@ -28,7 +28,7 @@ Missing Trigger or Hypothesis makes the entry inadmissible. Write them even when
 
 ## Write-time gate (AUDN)
 
-Before appending, read the active entries and decide one of:
+Before appending, search and read the active entries: `evergreen.py search "<the lesson in a few words>" --kinds learnings` ranks the learnings of every registered unit, archives included, by what they say (BM25, light stemming), so a near-duplicate in other words or in another unit still turns up. Then decide one of:
 
 - Add: nothing covers this. Append with the next ID.
 - Update: an existing entry covers the same trigger. Extend its Trigger with the new occurrence, bump `helpful` or `harmful`, tighten the Rule if the new case sharpened it. Do not add a near-duplicate.
@@ -51,9 +51,11 @@ Promote when an entry is confirmed three times or is obviously general: compress
 
 Retire when `harmful` > `helpful`, when a refresh contradicts it, when its scope no longer exists (the tool was replaced, the repo archived), or during a consolidation pass when two entries merge. Archive, do not delete: the archive is the reasoning lineage that lets a future reader avoid re-adding a rule that was retired for cause.
 
+Where the counters come from: ACE tags each bullet helpful or harmful, but only as statistics (nothing is retired on them, and its curator only adds). Promoting and retiring on the counts is this protocol's extension; the nearer precedents are ExpeL (insights start at 2, gain one per upvote or edit, lose one per downvote, and are deleted at 0) and Library Drift (a skill retires after 100 or more trials at a contribution of -0.10 or worse; retiring after only 20 trials fell below the no-skill baseline). Whether a retirement here should also wait for a minimum count is an open question in RESEARCH.md (R-20260923-8).
+
 ## Budgets and consolidation
 
-Active entries under 200 lines. When `counts.learnings` passes `consolidate_every` (default 25) or the budget is exceeded, run a consolidation pass: read every active entry, merge near-duplicates, retire the dead, promote the proven, tighten wording. Edit entries individually. Log the pass as one `C-` entry listing the IDs touched.
+Active entries under 200 lines. When the active entries pass `consolidate_every` (default 25) or the budget is exceeded, run a consolidation pass (the session-start audit and `evergreen.py status` flag it as `consolidate:N>M`): read every active entry, merge near-duplicates, retire the dead, promote the proven, tighten wording. Edit entries individually. Log the pass as one `C-` entry listing the IDs touched.
 
 ## File header
 

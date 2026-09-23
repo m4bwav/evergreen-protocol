@@ -1,12 +1,14 @@
 # AGENTS.md
 
-This repo is the evergreen plugin: self-maintaining, self-proving skills and knowledge for AI agents. Read `README.md` for the shape and `protocol/PROTOCOL.md` for the rules. Structure: `protocol/` (spec), `skills/*/SKILL.md` (thirteen skills), `agents/` (three subagents), `scripts/evergreen.py` (stdlib CLI; run `python scripts/test_evergreen.py` before changing the interval rule), `templates/`, `profile/`, `hooks/`, `evals/` and `TESTS.md` (the plugin's own suite and run log).
+This repo is the evergreen plugin: self-maintaining, self-proving skills and knowledge for AI agents. Read `README.md` for the shape and `protocol/PROTOCOL.md` for the rules. Structure: `protocol/` (spec), `skills/*/SKILL.md` (thirteen skills), `agents/` (three subagents), `scripts/evergreen.py` (stdlib CLI; run `python scripts/test_evergreen.py` before changing the interval rule, and `scripts/bench_intervals.py` to see what a change would do), `templates/`, `profile/`, `hooks/`, `evals/` and `TESTS.md` (the plugin's own suite and run log).
 
 ## Commands
 
 - Self-test: `python scripts/test_evergreen.py`
 - Audit with checks: `python scripts/evergreen.py audit --checks`
 - Validate plugin structure (Claude Code): `claude plugin validate .claude-plugin/plugin.json`
+- Benchmark the refresh schedule (synthetic units, the real rule imported): `python scripts/bench_intervals.py`
+- Skill evals (Claude Code 2.1.269+): `claude plugin eval . --trust-plugin --no-publish --case "trigger-*" --judge-model sonnet` (cases in `evals/cases/`; on native Windows only cases without Bash run)
 
 ## Style
 

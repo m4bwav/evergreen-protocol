@@ -6,22 +6,45 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
-### L-020 · 2026-09-17 · A shell hook committed from Windows can carry CRLF endings, and `* -text` in .gitattributes ships them everywhere
-- Trigger: the privacy scrub of the tree for the public repository showed `scripts/evergreen-hook.sh` (and 40 other files) with CRLF endings; under `sh` on macOS or Linux a CRLF script fails at the first `case` line, so all three Claude Code hooks would have died silently on every non-Windows install, and nothing in the paradigm would have noticed because the development machine's Git Bash strips the ``
-- Hypothesis: editors and tools on Windows write CRLF by default; `* -text` (needed so pack manifests and patches hash the bytes on disk) also means git never normalises, so whatever a Windows editor wrote is what every clone gets
-- Rule: keep every committed text file LF (`*.sh text eol=lf` on top of `* -text`, the whole tree normalised once), let `shipped_bytes` and `export` normalise `.sh` regardless, keep the test that asserts the hook has no ``, and let CI on a second operating system be the proof (C-20260917-2); an agent writing files on Windows passes `newline="
-"` or writes bytes
-- Evidence: C-20260917-2; the portability audit of 2026-09-17; test_sh_hook_is_lf_everywhere
+### L-023 · 2026-09-23 · Judge a decoy on what the agent did, not on the words it used
+- Trigger: the first decoy run of 2026-09-23 under `claude plugin eval` (T-20260923-2): the Skill tool fired 0 times in all 9 runs with the plugin, yet the `llm` rubric ("does not route it to any evergreen plugin skill or mention refreshing, tuning or publishing an evergreen unit") failed 3 of them, replies that declined correctly but named `evergreen-test` as not fitting, or passed on the plugin's session-start question about contributing (in the harness's throwaway home the choice is always undecided, so that notice sits in every with-plugin run)
+- Hypothesis: a rubric that forbids vocabulary instead of behaviour penalises the agent for explaining its choice, and a fresh install's session-start notices are part of every with-plugin run
+- Rule: a decoy passes on the deterministic check (`tool_used: Skill`, `max: 0`, `arm: both`); an `llm` grader, if kept, judges whether the reply invoked or recommended the skill for the request, and says in so many words that naming a skill to decline it, or relaying a plugin notice, is fine
+- Evidence: evals/cases/decoy-1, decoy-2 and decoy-3 `graders/outcome.md` (C-20260923-12); the rerun passed 9 of 9 with the plugin
+- Scope: skill (evergreen-test; TESTING.md §7)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-23
+
+### L-022 · 2026-09-23 · Parse `git status --porcelain` by its columns; the shared `git()` helper strips the first line's leading space
+- Trigger: a publish commit on 2026-09-22 listed "Other files: - EARNINGS.md": `evergreen.py`'s `git()` returns stripped output, which removed the leading space of the first porcelain line (" M LEARNINGS.md"), and `changed_paths` cut a fixed three characters, so the first changed path lost its first letter in every commit message whose first change was an unstaged modification
+- Hypothesis: stripping is right for one-line answers (a sha, a branch name) and wrong for column formats, where leading whitespace is data; it stayed unseen because only the commit body lists the paths, while `git add -A` staged the files correctly
+- Rule: parse porcelain lines with a pattern over the status columns (`^([ MTADRCU?!]{1,2}) (.+)$`), never with a fixed slice of stripped output; keep the test that edits LEARNINGS.md first and checks the path comes back whole
+- Evidence: C-20260923-11; test `GitTransport.test_changed_paths_keep_the_first_path_whole`
+- Scope: skill
+- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-23
+
+### L-021 · 2026-09-22 · Anchor a new CHANGELOG entry on the newest real heading, never on the first `### C-`
+- Trigger: everlast-capture's CHANGELOG.md (2026-09-22 refresh) had its C-20260913-1 heading pasted into the middle of the `Entry shape:` line and the rest of that line stranded lower down as a fake `### C-YYYYMMDD-n` heading; the entries were also out of order
+- Hypothesis: every companion's header quotes the entry template (`Entry shape: `### C-YYYYMMDD-n · ...``), so an insert-before-first-`### C-` (or `### R-`, `### L-`, `### T-`) lands inside that template line instead of above the newest entry
+- Rule: when inserting an entry by text, anchor on the full heading of the current newest entry (`### C-20260918-1 ·`) or on a line that starts with `### C-` and is not inside the header; after writing, list the file's `### ` headings and the `Entry shape` line and check the order and that the template is intact
+- Evidence: everlast/skills/everlast-capture/CHANGELOG.md repaired 2026-09-22 (Entry shape restored, stray heading removed, entries newest first); the same shape appears in every evergreen companion template
 - Scope: global
-- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-17
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-22
+
+### L-020 · 2026-09-17 · A shell hook committed from Windows can carry CRLF endings, and `* -text` in .gitattributes ships them everywhere
+- Trigger: the privacy scrub of the tree for the public repository showed `scripts/evergreen-hook.sh` (and 40 other files) with CRLF endings; under `sh` on macOS or Linux a CRLF script fails at the first `case` line, so all three Claude Code hooks would have died silently on every non-Windows install, and nothing in the paradigm would have noticed because the development machine's Git Bash strips the `\r`. 2026-09-23: the scripts broke the rule themselves: `save_state`, `save_registry` and the scaffold wrote with `Path.write_text`, which translates `\n` to CRLF on Windows, so every `checked`, `bump`, `tested` or `init` there rewrote evergreen.json and new companions with CRLF (this release's own `checked` did it, and a publish commit on 2026-09-22 had rewritten all 90 lines of evergreen.json the same way)
+- Hypothesis: editors and tools on Windows write CRLF by default; `* -text` (needed so pack manifests and patches hash the bytes on disk) also means git never normalises, so whatever a Windows editor wrote is what every clone gets
+- Rule: keep every committed text file LF (`*.sh text eol=lf` on top of `* -text`, the whole tree normalised once), let `shipped_bytes` and `export` normalise `.sh` regardless, keep the test that asserts the hook has no `\r`, and let CI on a second operating system be the proof (C-20260917-2); an agent writing files on Windows passes `newline="\n"` or writes bytes, and so do the scripts (`write_lf` in evergreen.py writes bytes, because `Path.write_text(newline=)` is Python 3.10+)
+- Evidence: C-20260917-2; the portability audit of 2026-09-17; test_sh_hook_is_lf_everywhere; C-20260923-13 and test_state_and_scaffold_files_are_written_lf
+- Scope: global
+- Status: active · helpful 0 · harmful 0 · last_confirmed 2026-09-23
 
 ### L-019 · 2026-09-13 · On Windows `claude plugin eval` refuses any case that grants a shell tool, and repeated `--case` flags keep only the last one
-- Trigger: the first full run of the plugin's suite (T-20260913-1): all 60 runs errored with "A shell tool (Bash or PowerShell) was granted but this machine cannot confine it (no sandbox backend on this platform)", even though `--allow-tools Bash` was passed; the rerun with `--case "trigger-*" --case "decoy-*" --case "outcome-*"` executed only outcome-1.
+- Trigger: the first full run of the plugin's suite (T-20260913-1): all 60 runs errored with "A shell tool (Bash or PowerShell) was granted but this machine cannot confine it (no sandbox backend on this platform)", even though `--allow-tools Bash` was passed; the rerun with `--case "trigger-*" --case "decoy-*" --case "outcome-*"` executed only outcome-1. On 2026-09-23 (2.1.280, T-20260923-2) `--case "trigger-[2-5]"` and `--case "trigger-{2,3,4,5}"` both answered "No eval cases found".
 - Hypothesis: the harness sandboxes shell tools through a backend that exists only on Linux and macOS, and on Windows it fails closed rather than running unconfined; `--case` is a single-value option, so the last flag wins.
-- Rule: on Windows, keep `allowed_tools` free of Bash and PowerShell in every harness case (trigger, decoy and outcome cases need only Read, Glob, Grep and Skill) and run action cases through the `evergreen-tester` agent, one fresh context per run; invoke the harness once per case-name pattern; pass `--judge-model sonnet` (the haiku judge failed a correct outcome-1 reply 3 of 3 votes); and delete the `%TEMP%\claude-eval-*` sandboxes afterwards, since `--keep-temp` and Windows both leave them behind.
-- Evidence: `evals/results/full-run.json` (60 refused runs), `run2.json` (only outcome-1 executed), `run3-trigger.json` and `run3-decoy.json` (clean), the tester-agent reports for action-1 and action-2 (T-20260913-1).
+- Rule: on Windows, keep `allowed_tools` free of Bash and PowerShell in every harness case (trigger, decoy and outcome cases need only Read, Glob, Grep and Skill) and run action cases through the `evergreen-tester` agent, one fresh context per run; invoke the harness once per case-name pattern, written with `*` only (character classes and braces match nothing); pass `--judge-model sonnet` (the haiku judge failed a correct outcome-1 reply 3 of 3 votes); and delete the `%TEMP%\claude-eval-*` sandboxes afterwards, since `--keep-temp` and Windows both leave them behind.
+- Evidence: `evals/results/full-run.json` (60 refused runs), `run2.json` (only outcome-1 executed), `run3-trigger.json` and `run3-decoy.json` (clean), the tester-agent reports for action-1 and action-2 (T-20260913-1); T-20260923-2 (trigger and decoy cases without a shell tool ran natively on Windows, sonnet judge).
 - Scope: plugin (evergreen-test §Step 3, TESTING.md §6)
-- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-13
+- Status: active · helpful 2 · harmful 0 · last_confirmed 2026-09-23
 
 ### L-018 · 2026-09-10 · Base64 attachments through a mail connector cost about one token per character; a whole `changes.patch` overflows one tool call, and the Drive-picker route is cheaper
 - Trigger: sending bundle 20260909-2229 through the Cowork Gmail connector: the 91 KB `changes.patch` became 121,352 base64 characters and the send call died with "Output token limit hit" before any message went out; a first attempt had already spent a subagent's session budget on pack, split and base64 prep. Claude in Chrome with "Insert files using Drive" then attached both `changes.patch` and the 235 KB mail archive from the outbox mirror in one message, with no base64 passing through the model.

@@ -30,7 +30,7 @@ Installed read-only copy? Write to the `source` path in its `evergreen.json`.
 
 ## Step 3: gate, then write
 
-Read the active entries in the target file. Decide: Add (new ID), Update (extend Trigger with the new occurrence, bump `helpful` or `harmful`, tighten Rule), Delete (retire the contradicted entry to `LEARNINGS-ARCHIVE.md` with a reason, then add if warranted), or None. Compare by meaning, not wording.
+Search first: `EG search "<the lesson in a few words>" --kinds learnings -n 5` ranks the learnings of every registered unit, archives included, by what they say, so a near-duplicate in other words still turns up. Then read the active entries in the target file. Decide: Add (new ID), Update (extend Trigger with the new occurrence, bump `helpful` or `harmful`, tighten Rule), Delete (retire the contradicted entry to `LEARNINGS-ARCHIVE.md` with a reason, then add if warranted), or None. Compare by meaning, not wording.
 
 Entry:
 
@@ -44,7 +44,7 @@ Entry:
 - Status: active · helpful 0 · harmful 0 · last_confirmed <today>
 ```
 
-Trigger and Hypothesis are required. Then `EG bump <unit> --learnings`. When the unit is the plugin (its own LEARNINGS.md or `profile/`), `bump` also emails the update digest to the owner (`[notify] ...` in its output; `evergreen-notify` handles "unsent").
+Trigger and Hypothesis are required. Then `EG bump <unit> --learnings`. When the unit is the plugin (its own LEARNINGS.md or `profile/`), `bump` also publishes the self-update where this install said yes to contributing (`[notify] ...` in its output).
 
 If the learning proves a claim in the unit's main file wrong: fix the main file now (delta edit), log a `C-` entry `because: L-<id>`, and `EG flag <unit> --contradiction "<why>"` so the next refresh re-verifies the neighborhood.
 
@@ -60,7 +60,7 @@ One line to the user: what was recorded and where. No lecture.
 
 - Promote after three confirmations or when clearly general: compress into the main file where it will be read at the right moment, log a `C-`, mark the entry `promoted: C-...`.
 - Retire when `harmful` > `helpful`, a refresh contradicts it, or its scope is gone. Archive with reason; never silently delete.
-- Consolidate when active entries pass `consolidate_every` (25) or 200 lines, or when asked: merge near-duplicates, retire the dead, promote the proven, tighten wording. Entry by entry, never a regeneration. One `C-` listing the IDs touched.
+- Consolidate when active entries pass `consolidate_every` (25) or 200 lines (the session-start audit flags it as `consolidate:N>M`), or when asked: merge near-duplicates, retire the dead, promote the proven, tighten wording. Entry by entry, never a regeneration. One `C-` listing the IDs touched.
 
 ## End-of-task reflection
 

@@ -4,6 +4,75 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260923-14 · 2026-09-23 · Protocol 1.10, version 0.9.0: claim-level recheck dates, typed links, search by meaning, upkeep at session start, a benchmark of the schedule, and four corrections
+- because: the owner's request ("update and improve evergreen with everything learned", addressing, where possible without reducing performance or usefulness, no meaning-based search, coarse tracking of time and links, upkeep that depends on the agent, and no benchmark score); C-20260923-1 to C-20260923-13; R-20260923-11
+- files: .claude-plugin/plugin.json (0.9.0), protocol/PROTOCOL.md (version line), evergreen.json (the four volatile claims restated as objects with `checked` and `recheck_days` after the use-time check of R-20260923-11; the check recorded with `checked`; counts; the suite run with `tested`), scripts/test_evergreen.py (a merge fixture that assumed the real state was last checked before 2026-09-12 now uses a date that stays in the future)
+- For a unit, 1.10 means: a volatile claim can carry its own check date, and Step 0 re-checks only the due ones (plain strings keep their old meaning); a `Related:` line can say how two documents relate, and the lint checks it; `evergreen.py search` finds a log entry by what it says, in every registered unit, for the write-time gate and for refresh step 3; the session-start hook also reports due claims and learnings past `consolidate_every`; every refresh records what it cost; `scripts/bench_intervals.py` scores the schedule. Left alone, because the owner decides them (AGENTS.md, Ask first): the interval rule, magnitude thresholds, tier bounds and defaults, hook events, and the entry ID grammar. What the benchmark suggests for the rule is in RESEARCH.md's open questions.
+
+### C-20260923-13 · 2026-09-23 · The scripts write LF on every platform: a state write on Windows no longer flips evergreen.json to CRLF
+- because: L-020 (updated: the scripts themselves broke its rule); found when this release's own `checked` turned every line of evergreen.json into a CRLF line, the same whole-file diff a publish commit showed on 2026-09-22
+- files: scripts/evergreen.py (`write_lf`, used by `save_state`, `save_registry`, the templates and scaffold writes and the install prompt; the use log appends with `newline="\n"`), scripts/test_evergreen.py (`test_state_and_scaffold_files_are_written_lf`), LEARNINGS.md (L-020)
+- `Path.write_text` translates `\n` to CRLF on Windows and its `newline=` argument is Python 3.10+, so `write_lf` writes bytes. With `* -text` in .gitattributes nothing normalised the result, so each check recorded on Windows rewrote the whole state file and each `init` there scaffolded CRLF companions; merges between a Windows clone and any other saw whole-file conflicts in evergreen.json. evergreen_sync.py's merge already wrote bytes with the file's own line endings; its other writes go to the store and the outbox, not to a unit.
+
+### C-20260923-12 · 2026-09-23 · Suite: trigger cases for evergreen-learn and evergreen-audit; the decoy rubric judges behaviour, not vocabulary; first run under the documented `claude plugin eval`
+- because: T-20260923-2, L-023, R-20260923-7; this release edited four skills (refresh, learn, test, audit), and learn and audit had no trigger case
+- files: evals/evals.json (trigger-4, trigger-5), evals/cases/trigger-4 and evals/cases/trigger-5 (prompt.md, graders/fires.md, graders/outcome.md), evals/cases/decoy-1, decoy-2 and decoy-3 (graders/outcome.md), TESTS.md (T-20260923-2), LEARNINGS.md (L-023; L-019 updated)
+- Triggers 18 of 18 runs with the plugin and 0 of 18 without; decoys quiet 18 of 18. The action and outcome cases were not run this time: the action cases grant Bash, which the harness refuses on native Windows (L-019), and no edit changed the actions they exercise.
+
+### C-20260923-11 · 2026-09-23 · Publish commit messages keep the first changed path whole
+- because: L-022
+- files: scripts/evergreen_sync.py (`changed_paths` parses the porcelain status columns with `PORCELAIN_RE`), scripts/test_evergreen.py (`test_changed_paths_keep_the_first_path_whole`), LEARNINGS.md (L-022)
+- The file list in a publish commit comes from `git status --porcelain`; the shared `git()` helper strips its output, so a first line " M LEARNINGS.md" became "M LEARNINGS.md" and a fixed slice cut it to "EARNINGS.md". Staging was never affected (`git add -A`).
+
+### C-20260923-10 · 2026-09-23 · AGENTS.md in Claude Code 2.1.277: keep the `@AGENTS.md` import; a prose pointer loads nothing
+- because: R-20260923-9
+- files: protocol/PORTABILITY.md (§The lowest common denominator; the Claude Code row), templates/CLAUDE.md.snippet (a comment on why the import stays; evergreen-publish added to the skill list), CLAUDE.md (the thirteen skills and three subagents; what the SessionStart hook now reports), RESEARCH.md (Current understanding)
+- The snippet and this repository's own CLAUDE.md already import, so no converted repo has to change; evergreen-convert and evergreen-new write no CLAUDE.md of their own (README points at the snippet), so they needed no edit.
+
+### C-20260923-9 · 2026-09-23 · A benchmark for the refresh schedule: `scripts/bench_intervals.py`
+- because: R-20260923-1 (the survey's open problem 12.3; no published benchmark for refresh policies), R-20260923-10, T-20260923-1; the owner's request (no benchmark score)
+- files: scripts/bench_intervals.py (new), scripts/test_evergreen.py (`test_bench_intervals_smoke`), protocol/INTERVALS.md (§How the rule compares), README.md (§What you get, §Using the scripts, §Testing), AGENTS.md (§Commands and structure line), RESEARCH.md (R-20260923-10; open questions)
+- It imports `new_state`, `compute_next` and `parse_when` from evergreen.py (the smoke test asserts it runs the same function) and compares the rule with a fixed interval at the rule's own check count, the tier's start interval held fixed, a fixed 14 days, a FreshCache-style constant per class and an oracle, on seeded synthetic units: Poisson changes with mean gaps from 2 to 365 days, a shifting class and a bursty class, magnitudes from a stated mix. Stdlib only, about a second for the default run. The rule is unchanged; the open questions carry what the numbers suggest.
+
+### C-20260923-8 · 2026-09-23 · Upkeep that does not wait for the agent: the session-start audit reports due claims and learnings due for consolidation, and every refresh records its cost
+- because: R-20260923-3, R-20260923-1; the owner's request (upkeep that depends on the agent)
+- files: scripts/evergreen.py (`unit_flags`, `consolidation_due`, `learning_entries`, `consolidate_limit`; `audit --brief` shows a verify-at-use unit only when claims are due and adds one closing line for due claims and one for consolidation; `status` and the full audit show `claims due N` and `consolidate:N>M`), scripts/test_evergreen.py, agents/evergreen-researcher.md (the closing `## Cost:` line), skills/evergreen-refresh (Step 2; Step 4 puts the cost line in the `--note`), skills/evergreen-audit (the flags and what to do about them), skills/evergreen-learn (the consolidation flag), protocol/PROTOCOL.md (§4 steps 2 and 7, §6, §7), protocol/LEARNINGS-FORMAT.md (§Budgets and consolidation), templates/MAINTENANCE.md.template (refresh step 7), README.md, CLAUDE.md
+- The existing SessionStart hook runs the same `audit --brief`, so no hook event was added; it stays silent when nothing needs attention (a verify-at-use unit with nothing due now prints nothing, where 1.9 printed it every session), and the extra cost is one small read of each unit's LEARNINGS.md. No research cap was added, because a cap would cut research quality; the cost line makes the spend visible, and a budget is an open question.
+
+### C-20260923-7 · 2026-09-23 · `evergreen.py search`: BM25 over every registered unit's log entries, for the write-time gate and refresh step 3
+- because: R-20260923-4; the owner's request (no meaning-based search)
+- files: scripts/evergreen.py (`search` command; `search_units`, `search_corpus`, `split_entries`, `search_tokens`, `stem`, `bm25`, `entry_title`), scripts/test_evergreen.py (`test_search_ranks_log_entries_across_registered_units`), skills/evergreen-learn (Step 3), skills/evergreen-refresh (Step 3), protocol/PROTOCOL.md (§4 step 3, §5), protocol/LEARNINGS-FORMAT.md (§Write-time gate), templates/LEARNINGS.md.template, templates/MAINTENANCE.md.template, README.md
+- Entries are the `### ` sections of LEARNINGS, RESEARCH, CHANGELOG and TESTS (archives included; template examples inside comments excluded) of the units in `EVERGREEN_HOME/registry.json`, else the unit around the current folder, else the plugin. Tokens: lowercase words with light stemming (s, es, ed, ing, no stem under three letters) plus code-like tokens kept whole (`evergreen.py`, `verify_at_use`, `L-021`); a heading term counts three times. One line per hit: score, unit, entry ID, heading, `path:line`; `--json` for scripts. No index file and no dependency: it reads the logs each time, milliseconds at this scale.
+
+### C-20260923-6 · 2026-09-23 · Typed `Related:` lines, the grammar Everlast adopts too, and a lint for them
+- because: R-20260923-5; the owner's request (coarse tracking of links)
+- files: protocol/PROTOCOL.md (§9), scripts/evergreen.py (`parse_related`, `split_related`, `related_problems`, `unit_markdown`; `lint` reports an unknown label, a target that does not exist and a wikilink on a Related line, and skips code fences, inline code and comments), scripts/test_evergreen.py (`test_typed_related_lines_are_linted`), templates/AGENTS.md.snippet, templates/MAINTENANCE.md.template (§Links and budgets)
+- `Related: supersedes [title](path); builds on [title](path), [title](path); see also [title](path)`, with the labels supersedes, superseded by, contradicts, builds on and see also; an unlabelled link counts as see also, so every older line passes, and a unit with no Related line is fine. The links stay relative markdown links, so graph editors show the same graph.
+
+### C-20260923-5 · 2026-09-23 · Claim-level recheck dates: a volatile claim can carry `checked` and `recheck_days`, and Step 0 re-checks only the due ones
+- because: R-20260923-2, R-20260923-11; the owner's request (coarse tracking of time)
+- files: scripts/evergreen.py (`claim_text`, `claim_recheck_days`, `claim_due`, `claims_due`, `claims_view`, the `claims` command; `freshness` counts due claims; `status` and `audit` print `claims due N`), scripts/test_evergreen.py (`test_volatile_claims_accept_both_shapes`, `test_claims_command_lists_stamps_and_adds`, `test_brief_audit_reports_due_claims_and_consolidation_only_when_due`), protocol/PROTOCOL.md (§2 table, §3), protocol/INTERVALS.md (the verify-at-use wording in §Tier migration), templates/MAINTENANCE.md.template, templates/MAINTENANCE-POINTER.md.template, templates/MAINTENANCE-SECTION.md.template, templates/SKILL.md.template, templates/AGENTS.md.snippet (Step 0), skills/evergreen-refresh (Step 4), skills/evergreen-audit (Step 1, Step 3), README.md
+- A plain string keeps its meaning (due at every use), so every existing unit behaves as before until its claims are stamped; `claims <unit> --stamp due` turns a re-checked string into an object dated today. The interval rule never reads the claims, and `checked --use-time` is unchanged; evergreen_sync's state merge copies the list whole from the newer state, whatever its shape.
+
+### C-20260923-4 · 2026-09-23 · The counters come from ACE; the promote-and-retire rule extends it
+- because: R-20260923-8
+- files: protocol/PROTOCOL.md (§6), protocol/LEARNINGS-FORMAT.md (the evidence line; §Promotion and retirement), RESEARCH.md (Current understanding; an open question on a minimum count before retiring)
+- Wording and attribution only; the rule is unchanged.
+
+### C-20260923-3 · 2026-09-23 · `claude plugin eval` is documented again (Claude Code 2.1.269) and preferred where it runs
+- because: R-20260923-7
+- files: protocol/TESTING.md (§3: the harness reads its own case folders, generated from `evals.json`; §6: the row rewritten from the docs and moved back to first), protocol/PORTABILITY.md (Claude Code row), skills/evergreen-test (Step 3: prefer the plugin-eval harness, the grader mapping, `--no-publish`, WSL2 for cases that grant a shell; the baseline arm in Step 3.1; Step 5 wording), README.md (§Testing), AGENTS.md (§Commands), RESEARCH.md (Current understanding; the open question resolved)
+
+### C-20260923-2 · 2026-09-23 · SkillsBench v4 numbers
+- because: R-20260923-6
+- files: protocol/PROTOCOL.md (§4, Ranking the tooling track), RESEARCH.md (Current understanding)
+- "About 16 points, a sixth of tasks worse, self-generated skills add nothing" becomes 33.9 to 50.5 percent (+16.6 points), 13 of 87 tasks worse, and self-generated skills 8.1 to 11.5 points below no skills; R-20260917-2 keeps the earlier version's numbers as its own record.
+
+### C-20260923-1 · 2026-09-23 · L-021 from the private fork, carried with its ID; L-020's stray control characters written as escapes
+- because: L-021 (a general lesson from the owner's private fork, 2026-09-22: an entry inserted before the first `### C-` lands inside the header's `Entry shape:` line); L-020 itself (a learning about LF endings that held two literal carriage returns)
+- files: LEARNINGS.md
+- L-021 is copied byte for byte so the fork merges cleanly, and this release's CHANGELOG entries were anchored on the newest real heading, as it says. In L-020, two carriage returns and a line break that had replaced `\r` and `\n` inside backquotes are now the two-character escapes, so LEARNINGS.md is LF-only again.
+
 ### C-20260918-3 · 2026-09-18 · Protocol 1.9: indexes first, with a shape, a budget, tiering, an exclusion list, an optional single back-link and a way to prove they pay; version 0.8.3
 - because: the owner's request (indexes that link most docs and are a net positive for agents and people alike, without costing agent performance; back-links only where they earn their place); R-20260918-2
 - files: protocol/PROTOCOL.md §9 (the linking paragraph became seven rules), templates/AGENTS.md.snippet, RESEARCH.md (R-20260918-2), .claude-plugin/plugin.json (0.8.3)

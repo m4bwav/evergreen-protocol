@@ -51,7 +51,7 @@ Worked example (`moderate`, 14 to 90 days, rounded for display): a quiet field w
 Topics change character. After each check:
 
 - Immediate promotion: a major change (m ≥ 0.6) whose quartered interval falls below the tier's min moves the unit one tier faster right away. `fast` and `live` have nowhere faster to go; they pin at min and count.
-- Promote after a streak: the interval was clamped at the min bound for 2 consecutive checks with m ≥ 0.3. Move one tier faster and set I to the new tier's min. `fast` (or `live`) pinned this way three times in a row becomes `verify_at_use: true`: `next_due` is cleared, scheduling stops, and the volatile claims are re-checked at every use instead.
+- Promote after a streak: the interval was clamped at the min bound for 2 consecutive checks with m ≥ 0.3. Move one tier faster and set I to the new tier's min. `fast` (or `live`) pinned this way three times in a row becomes `verify_at_use: true`: `next_due` is cleared, scheduling stops, and the volatile claims are re-checked at use instead, each one when it is due (PROTOCOL.md §3: a plain string is due at every use; an object is due `recheck_days` after its `checked` date).
 - Demote (slower tier): the interval sat at the max bound for 3 consecutive checks with m = 0. Move one tier slower; I stays at the current value (which is inside the new bounds).
 - `verify_at_use` turns back off when two consecutive use-time checks find nothing; the unit returns to `fast` at its start interval.
 - Migration drops any custom `bounds_days` (they belonged to the old tier). `code` and `none` never migrate.
@@ -61,6 +61,10 @@ The script tracks `streak.pinned_min`, `streak.pinned_max`, and `streak.quiet` f
 ## Script
 
 `scripts/evergreen.py checked <unit> --m 0.4 --note "CONSORT 2026 revision"` applies all of the above, adds ±15% jitter to `next_due` so many units do not all come due the same day (the stored interval stays unjittered), and prints the result. `evergreen.py next <unit> --m 0.4` is a dry run. The script is canonical when available; the hand rule gives the same interval, and a `next_due` within the jitter band.
+
+## How the rule compares
+
+`python scripts/bench_intervals.py [--seed N] [--days 730] [--json]` runs this rule, imported from `evergreen.py` rather than copied, on synthetic units whose facts change as a Poisson process (plus a regime-shifting class and a release-like bursty class), next to a fixed interval that spends the same number of checks, the tier's start interval held fixed, a fixed 14 days, a FreshCache-style constant interval per class, and an oracle that checks at every change. It reports detection delay per change and per material change (m ≥ 0.3), the share of time a material change goes unseen, and checks per year. The change model is synthetic, so the numbers compare schedules; they do not forecast a unit. The first results and what they suggest are RESEARCH.md R-20260923-10; the rule itself is unchanged, since changing it is asked of the owner first (AGENTS.md), and the proposals are open questions there.
 
 ## Test failures are a signal, not a magnitude
 

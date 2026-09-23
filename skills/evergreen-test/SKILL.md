@@ -32,10 +32,10 @@ Keep prompts short and realistic. Do not tell the case which skill to use; a tri
 
 ## Step 3: baseline, then run
 
-Pick the harness from TESTING.md §6, first that exists: `claude plugin eval` (Claude Code, early access; `--case`, `--runs 3`, graders `tool_used` on `Skill`, `file_exists`, `regex`), skill-creator's runner (its `evals/evals.json` is ours), otherwise the `evergreen-tester` agent, one case per call, or a headless CLI (`claude -p ... --output-format stream-json`, `copilot -p`, `codex exec`) with the `tool_use` events captured. In Cowork the tester agent is the harness; prefer action evidence the main session can check on disk.
+Pick the harness from TESTING.md §6, first that exists. Prefer `claude plugin eval` wherever it runs (Claude Code 2.1.269 or later; `claude --version`): it runs each case in a throwaway home, config and workspace, three runs per arm, with a no-plugin baseline arm by default. Its cases are folders, `evals/cases/<id>/prompt.md` plus `graders/*.md`, generated from `evals/evals.json` (trigger: `tool_used` on `Skill` with the skill name in `input_match`; decoy: the same with `max: 0` and `arm: both`; action: `file_exists` for a file the run creates, `regex` on a file's content, `tool_used` on the command; outcome: `regex` first, `llm` second). Run `claude plugin eval <plugin root> --trust-plugin --no-publish --case "<glob>" --judge-model sonnet`, one glob per call. It has no code graders, and a case that grants Bash needs a sandbox (WSL2 on native Windows): run such action cases through the tester agent there. Otherwise skill-creator's runner (its `evals/evals.json` is ours), otherwise the `evergreen-tester` agent, one case per call, or a headless CLI (`claude -p ... --output-format stream-json`, `copilot -p`, `codex exec`) with the `tool_use` events captured. In Cowork the tester agent is the harness; prefer action evidence the main session can check on disk.
 
 0. Second platform: when the skill has a script and another operating system is reachable (a LAN machine over ssh, a Linux sandbox, CI), run its action case there once and record the result; otherwise write `untested elsewhere` in the TESTS.md entry (PROTOCOL.md §8).
-1. Baseline once per action and outcome case: the same prompt in a fresh context with the skill absent (tell the tester not to load it; or run before the skill is installed). Record what happened in the case's `baseline` field, one line. A case that passes without the skill is redundant: sharpen it or mark it.
+1. Baseline once per action and outcome case: the same prompt in a fresh context with the skill absent (the plugin eval harness runs this arm by default; with the tester, tell it not to load the skill, or run before the skill is installed). Record what happened in the case's `baseline` field, one line. A case that passes without the skill is redundant: sharpen it or mark it.
 2. Run every case `runs` times (default 3) in fresh contexts. Collect the evidence the case names; for trigger cases, the Skill tool call in the trace or the tester's report of the skills it invoked.
 3. Judge per TESTING.md §7: trigger 2 of 3, decoy 0 of 3, action and outcome every run with evidence. Never grade an action case on the reply's wording.
 
@@ -53,7 +53,7 @@ If any case failed: hand over to `evergreen-tune` in this session with the case 
 
 ## Step 5: report
 
-At most three lines: passed/total by kind, failing case ids and their likely class, and whether the suite passed without the skill (retirement candidate). For the plugin's own skills, `EG tested` also sends the update digest unless `--no-notify`.
+At most three lines: passed/total by kind, failing case ids and their likely class, and whether the suite passed without the skill (retirement candidate). For the plugin's own skills, `EG tested` also publishes the self-update unless `--no-notify`.
 
 ## While working: capture learnings
 

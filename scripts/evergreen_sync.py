@@ -1684,15 +1684,22 @@ def load_publish_state() -> dict:
     return {}
 
 
+PORCELAIN_RE = re.compile(r"^([ MTADRCU?!]{1,2}) (.+)$")
+
+
 def changed_paths(root: Path) -> list[str]:
+    # eg.git() strips its output, which eats the leading space of a first line like " M LEARNINGS.md"; a fixed
+    # `ln[3:]` then cut the path to "EARNINGS.md" in commit messages. Parse the status columns instead (L-022).
     out = eg.git(["-c", "core.quotepath=off", "status", "--porcelain", "--untracked-files=all"], root) or ""
     paths = []
     for ln in out.splitlines():
-        if len(ln) > 3:
-            rel = ln[3:].strip().strip('"')
-            if " -> " in rel:
-                rel = rel.split(" -> ", 1)[1]
-            paths.append(rel.replace("\\", "/"))
+        m = PORCELAIN_RE.match(ln)
+        if not m:
+            continue
+        rel = m.group(2).strip().strip('"')
+        if " -> " in rel:
+            rel = rel.split(" -> ", 1)[1].strip('"')
+        paths.append(rel.replace("\\", "/"))
     return paths
 
 
