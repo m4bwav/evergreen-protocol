@@ -18,7 +18,7 @@ Refresh: read RESEARCH.md (Current understanding, Open questions, Search plan in
 
 Tests: `evals/evals.json` holds trigger cases and decoys, action cases with named evidence (a tool call in the trace, a file, a marker), outcome cases, and each case's baseline without the skill. Run each three times in a fresh context; log the run as `T-YYYYMMDD-n` in TESTS.md; keep `evergreen.json.tests` current. On a failure: reproduce, classify (undertrigger, overtrigger, no-op, fallback, wrong-outcome, environment, harness), write the learning, refresh first when research is older than half the interval or the class is no-op or fallback, make the smallest edit, re-run; three iterations at most.
 
-Interval by hand, with current interval I and magnitude m: contradiction → I = tier min; m ≥ 0.6 → I ÷ 4; 0.3 ≤ m < 0.6 → I ÷ 2; 0 < m < 0.3 → unchanged; m = 0 → I × 1.5. Clamp to the tier (min/max days: live 0.25/3 · fast 3/21 · moderate 14/90 · slow 60/365 · glacial 270/900 · code 7/90 · none: no research). Set `last_checked` to today, `next_due` = today + I, clear `contradiction`, append `{date, m, interval_after, note}` to `history`.
+Interval by hand, with current interval I and magnitude m: contradiction → I = tier min; m ≥ 0.6 → I ÷ 2; 0.3 ≤ m < 0.6 → I ÷ 1.5; 0 < m < 0.3 → unchanged; m = 0 → I × 1.25. Clamp to the tier (min/max days: live 0.25/3 · fast 3/21 · moderate 14/90 · slow 60/365 · glacial 270/900 · code 7/90 · none: no research). Set `last_checked` to today, `next_due` = today + I, clear `contradiction`, append `{date, m, interval_after, note}` to `history`.
 
 ## Installed copies
 

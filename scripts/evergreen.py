@@ -84,6 +84,9 @@ TIERS = {
     "none": (None, None, None),
 }
 TIER_ORDER = ["live", "fast", "moderate", "slow", "glacial"]  # fastest -> slowest; code and none never migrate
+# the interval rule's steps (protocol/INTERVALS.md, protocol 1.11): a major change halves the interval, a change cuts it
+# by a third, a quiet check grows it by a quarter; bench_intervals.py --rule overrides them to score a candidate
+RULE = {"major_div": 2.0, "change_div": 1.5, "quiet_mul": 1.25}
 JITTER = 0.15
 BUDGETS = {"main": 200, "main_hard": 500, "learnings": 200, "codemap": 150, "understanding": 60, "tests": 150}
 ID_RE = re.compile(r"(?<![\w.:-])(R-\d{8}-\d+|C-\d{8}-\d+|T-\d{8}-\d+|L-\d{3,})\b")  # `other-unit:L-003` is a qualified cross-unit reference, not checked here
@@ -398,8 +401,8 @@ def compute_next(st: dict, m: float | None, now: datetime, contradiction: bool =
         I = mn
         report.append("contradiction: interval reset to min")
     elif m >= 0.6:
-        I = I / 4
-        report.append("major change: interval / 4")
+        I = I / RULE["major_div"]
+        report.append(f"major change: interval / {RULE['major_div']:g}")
         # immediate promotion: a major change that would clamp below min moves one tier faster now
         if idx is not None and idx > 0 and I < mn and tier not in ("fast", "live"):
             new_tier = TIER_ORDER[idx - 1]
@@ -408,13 +411,13 @@ def compute_next(st: dict, m: float | None, now: datetime, contradiction: bool =
             I = max(mn, I)
             streak["pinned_min"] = 0
     elif m >= 0.3:
-        I = I / 2
-        report.append("change: interval / 2")
+        I = I / RULE["change_div"]
+        report.append(f"change: interval / {RULE['change_div']:g}")
     elif m > 0:
         report.append("minor churn: interval held")
     else:
-        I = I * 1.5
-        report.append("quiet: interval x 1.5")
+        I = I * RULE["quiet_mul"]
+        report.append(f"quiet: interval x {RULE['quiet_mul']:g}")
 
     eps = 1e-6
     clamped_min = I <= mn + eps
