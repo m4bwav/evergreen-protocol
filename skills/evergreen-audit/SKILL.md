@@ -1,6 +1,6 @@
 ---
 name: evergreen-audit
-description: "List every evergreen unit (skills, docs, codemaps, profiles) with its tier, last check, due date, staleness, drift, test status (untested, overdue, failing), link integrity, and budget problems, then refresh what is due. Use right after installing or updating the evergreen plugin (it may have sat on a shelf), at the start of work in a new environment, on 'evergreen status', 'what's stale', 'audit my skills', 'check the skills', 'anything due', or whenever a session-start hook reports due units. Also the place to register units the plugin does not know about."
+description: "Status overview of the whole evergreen catalog (skills, docs, codemaps, profiles) in one table: tier, last check, due date, staleness, drift, test status (untested, overdue, failing), link integrity and budget problems, then hands what is due to evergreen-refresh. Use on catalog-wide questions such as 'evergreen status', 'what's stale', 'anything due', 'audit my skills', 'check the skills', right after installing or updating the evergreen plugin (it may have sat on a shelf), at the start of work in a new environment, or whenever a session-start hook reports due units. Also the place to register units the plugin does not know about. Refreshing a single unit is evergreen-refresh."
 ---
 
 # Evergreen audit
