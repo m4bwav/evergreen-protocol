@@ -1,6 +1,6 @@
 ---
 name: evergreen-refresh
-description: "Refresh an evergreen unit's research from primary web sources and reschedule its next check adaptively. Use whenever a skill or doc reports it is stale or past due, when the user says 'refresh X', 'update X's research', 'is X stale', 'is this still current', 'check for changes to X', or after an audit lists due units. Also use when a learning has flagged a contradiction in a unit. Handles one unit or every unit that is due."
+description: "Refresh one named evergreen unit's research from primary web sources and reschedule its next check adaptively; also works through the whole list an audit hands over. Use when the user asks about that specific skill or doc: 'refresh X', 'update X's research', 'is X stale', 'is this still current', 'check for changes to X', when a skill or doc reports it is stale or past due, or when a learning has flagged a contradiction in it. Listing what is due across the catalog is evergreen-audit."
 ---
 
 # Evergreen refresh

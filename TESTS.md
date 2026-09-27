@@ -8,6 +8,12 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20260926-1 · 2026-09-26 · claude plugin eval 2.1.281 (trigger-3, trigger-5, decoy-1 to decoy-3; sonnet judge, --no-publish); scripts/test_evergreen.py; context-health `selection` · owner-pc · 5/5 cases, 17/18 with-plugin runs
+- After the evergreen-audit and evergreen-refresh description edit. trigger-3 ("Is the evergreen plugin's research stale? If so bring it up to date", a named unit) fired evergreen-refresh 3 of 3 with the plugin and 0 of 3 without; trigger-5 ("which of my skills are stale or due for a refresh", the catalog) fired evergreen-audit 3 of 3 and 0 of 3 without. Decoys: no evergreen skill fired in any of 18 runs.
+- decoy-2 · decoy · harness · run 2 with the plugin: the judge voted FAIL on a reply that said no skill was needed for the bug fix, while the quiet grader passed (Skill called 0 times); a judge false negative, not a trigger, and the case passes on its tool evidence
+- Self-test 76 tests OK (1 skipped); `lint .` OK. Selection check with the edited descriptions substituted into the installed catalog: the pair falls from TF-IDF cosine 0.49 to 0.30, with no new pair over 0.30 for either skill.
+- led to: C-20260926-1
+
 ### T-20260923-4 · 2026-09-23 · scripts/test_evergreen.py after the 1.11 steps; scripts/bench_intervals.py sweep of twenty candidate step sizes · owner-pc · 76/76
 - Self-test: 76 cases pass after the interval-rule cases were rewritten for the new steps (quiet walk 30 → 37.5 → 46.88 → 58.6 → 73.25 → 90; a shake-up halves and a change cuts by a third; promotion on one major change only below the floor; live 6 h → 7.5 h; jitter band around 37.5). `--rule major_div=4,change_div=2,quiet_mul=1.5` reproduces T-20260923-1's table to the decimal.
 - Benchmark, seeds 1 to 3, 730 days, 25 units per class; checks per year summed over the seven middle classes (7d, 14d, 30d, 60d, 120d, shift, burst), the share of time holding a stale material claim and the days to see a material change averaged over them, and the gap to even spacing at the same count:
