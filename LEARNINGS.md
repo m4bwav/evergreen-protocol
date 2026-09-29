@@ -6,6 +6,14 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-025 · 2026-09-29 · Headless eval runs share the session's filesystem and write to the unit's source; end every suite with `git status` (`suite-ends-with-git-status`)
+- Trigger: wikiwright's action suites ran through `claude -p` outside `claude plugin eval`'s throwaway workspace. In wikiwright:T-20260928-3 two skill-arm runs followed "capture learnings" and edited the source LEARNINGS.md, and one answered "does the wiki exist" with `git fetch` in a clone the launching session had made minutes before; in wikiwright:T-20260929-1 runs wrote a new learning, updates to three more and a line in a reference file, and left an untracked `package.json` (from `npm init -y`) in the skill's folder, which `git diff` does not show (2026-09-28, 2026-09-29)
+- Hypothesis: a fresh context is not a fresh filesystem; a headless run or subagent has the same files, overlay and plugin paths as the session that starts it, so the unit's source and anything the session made before the suite are part of every case
+- Rule: commit the unit's source before a suite and create nothing a case could see; end the suite with `git status --short` of the source, not only `git diff`; review each eval-written change (keep, renumber or reject, with the reason) before committing, and record it under side effects in the run's `T-` entry
+- Evidence: wikiwright:L-017 (`evals-touch-the-source`), wikiwright:T-20260928-3 and wikiwright:T-20260929-1 (side-effects lines); wikiwright 0.5.0's `evals/run-suite.sh` ends with `git status --short` of the plugin source; TESTING.md §6
+- Scope: plugin (TESTING.md §6; templates/MAINTENANCE.md.template §Tests)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-29
+
 ### L-024 · 2026-09-23 · Any plugin-kind unit took over the registry's `plugin_root`
 - Trigger: after a refresh of another plugin unit (`kind: plugin`) and the everlast release's `checked` runs on 2026-09-23, `registry.json` named that other plugin's folder as `plugin_root`, so pointer-mode units that follow MAINTENANCE.md's "Finding the plugin" looked for the protocol in the wrong folder
 - Hypothesis: `register` treated `kind: plugin` as "this is the evergreen plugin", but every plugin that is itself an evergreen unit has that kind

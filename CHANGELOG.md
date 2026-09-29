@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20260929-1 · 2026-09-29 · Headless eval runs share the session's filesystem: commit before a suite, end it with `git status`, review what the runs wrote
+- because: L-025 (from wikiwright:L-017, wikiwright:T-20260928-3 and wikiwright:T-20260929-1)
+- files: protocol/TESTING.md (§6, a paragraph after the preference line), templates/MAINTENANCE.md.template (§Tests (skills)), LEARNINGS.md (L-025)
+- `claude plugin eval` gives each run a throwaway workspace; `claude -p` runs and the tester agent do not, so a skill-arm run that follows "capture learnings" edits the unit's source, and a run can leave untracked files there that `git diff` misses. The rule: commit the source first, create nothing a case could see, finish with `git status --short` of the source, and review each eval-written change before committing, recording it under side effects in the `T-` entry. Protocol text clarified, no behaviour change in the scripts, so no version or protocol bump; `skills/evergreen-test/SKILL.md` is untouched (it defers to TESTING.md §6), so no suite re-run is owed.
+
 ### C-20260926-1 · 2026-09-26 · evergreen-audit and evergreen-refresh descriptions split by scope: the whole catalog against one named unit
 - because: the owner's request (resolve the pair's selection conflict without losing a trigger); context-health's `selection` check on the owner's install scored the two descriptions at TF-IDF cosine 0.49, over its 0.45 "possibly confusable" line, with "due" and "unit" carrying almost all of the overlap; skill-selection research (arXiv 2606.30775) found that editing both sides of a confused pair adds under 0.5 percent over editing one, so each side got the smallest edit that separates it; T-20260926-1
 - files: skills/evergreen-audit/SKILL.md (description), skills/evergreen-refresh/SKILL.md (description), TESTS.md (T-20260926-1)
