@@ -53,7 +53,7 @@ If any case failed: hand over to `evergreen-tune` in this session with the case 
 
 ## Step 5: report
 
-At most three lines: passed/total by kind, failing case ids and their likely class, and whether the suite passed without the skill (retirement candidate). For the plugin's own skills, `EG tested` also publishes the self-update unless `--no-notify`.
+At most three lines: passed/total by kind, failing case ids and their likely class, and whether the suite passed without the skill (retirement candidate: hand the numbers to `evergreen-worth`, which weighs the gain against the cost). For the plugin's own skills, `EG tested` also publishes the self-update unless `--no-notify`.
 
 ## While working: capture learnings
 

@@ -1371,5 +1371,187 @@ class GitTransport(unittest.TestCase):
         self.assertIn("remote change", log); self.assertIn("L-901", log)
 
 
+import evergreen_worth as ew  # noqa: E402
+
+GENERIC_SKILL = """---
+name: code-quality
+description: Helps write high quality code. Use when writing code.
+---
+# Code quality
+
+You are an expert senior software engineer. Always write clean code that is readable and maintainable.
+
+- Make sure to follow best practices at all times.
+- Ensure that your code is robust and handles errors gracefully.
+- Think step by step before writing any code.
+- Consider edge cases carefully.
+- Write tests when appropriate.
+- Keep functions small and focused on a single responsibility.
+- Use meaningful names for variables and functions.
+- Be thorough when reviewing your work and double-check everything.
+- It is important to keep the code simple.
+"""
+
+SPECIFIC_SKILL = """---
+name: build-box
+description: >
+  Build and ship the game on the build box. Use when the user says 'build the game',
+  'ship a build' or 'is the build box up'.
+---
+# Build box
+
+1. Check the box answers: `ssh build@10.0.0.5 uptime`.
+2. Run `/opt/py311/bin/python3 tools/build.py --target win64 --config Release`.
+3. The artifact lands in `D:/builds/<date>/Game.zip`; confirm it exists before reporting done.
+4. Upload with `gh release upload v$VERSION D:/builds/<date>/Game.zip -R studio/game`.
+5. The Steam branch is `beta`; SteamCMD lives at `C:/steamcmd/steamcmd.exe`.
+6. Unity 6000.2.7f1 is the only editor the CI license covers.
+7. A failed IL2CPP step on Windows means the MSVC 14.44 toolset is missing; see `references/msvc.md`.
+8. Never build from `main` on Fridays: the release freeze in `docs/FREEZE.md` applies.
+"""
+
+
+def result_file(folder: Path, with_runs, without_runs, cost_with=0.2, cost_without=0.1, name="action-1", when="2026-09-30T10:00:00Z"):
+    """A minimal `claude plugin eval` aggregate-result.json with one value case."""
+    folder.mkdir(parents=True, exist_ok=True)
+    arm = lambda runs, cost: [{"passed": bool(p), "score": float(p), "turns": 4, "costUsd": cost, "durationSeconds": 30,  # noqa: E731
+                               "error": None} for p in runs]
+    d = {"schemaVersion": 1, "startedAt": when, "suite": {"ablation": "with-without"},
+         "cases": [{"name": name, "arms": {"with": arm(with_runs, cost_with), "without": arm(without_runs, cost_without)}}]}
+    (folder / "aggregate-result.json").write_text(json.dumps(d), encoding="utf-8")
+
+
+class Worth(unittest.TestCase):
+    """The worth check: static signals, the A/B verdict, recording, the edit check and the hook (TESTING.md section 8)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.t = Path(self.tmp.name)
+        os.environ["EVERGREEN_HOME"] = str(self.t / "home")
+
+    def tearDown(self):
+        os.environ.pop("EVERGREEN_HOME", None)
+        self.tmp.cleanup()
+
+    def skill(self, name, text):
+        d = self.t / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(text, encoding="utf-8")
+        return d
+
+    def test_general_advice_reads_suspect_and_specific_procedure_does_not(self):
+        bad = ew.static_report(self.skill("bad", GENERIC_SKILL) / "SKILL.md", peers=False, uses=False)
+        good = ew.static_report(self.skill("good", SPECIFIC_SKILL) / "SKILL.md", peers=False, uses=False)
+        self.assertEqual(bad["static"], "SUSPECT")
+        self.assertTrue(any(w.startswith("mostly general advice") for w in bad["warnings"]))
+        self.assertGreaterEqual(bad["platitudes"], ew.PLATITUDE_WARN)
+        self.assertEqual(good["static"], "LEAN", good["warnings"])
+        self.assertGreater(good["specific_share"], 0.8)
+        self.assertEqual(ew.verdict(bad, None)[0], "SUSPECT")
+        self.assertEqual(ew.verdict(good, None)[0], "UNPROVEN")  # reading alone never proves a skill helps
+
+    def test_frontmatter_folded_description_is_read_whole(self):
+        fm, body = ew.parse_frontmatter(SPECIFIC_SKILL)
+        self.assertEqual(fm["name"], "build-box")
+        self.assertIn("'is the build box up'", fm["description"])
+        self.assertTrue(body.startswith("# Build box"))
+
+    def test_ab_verdicts(self):
+        lean = {"static": "LEAN"}
+        cases = {
+            "gain": (([1, 1, 1, 1, 1, 1], [0, 0, 1, 0, 0, 0], 0.12, 0.1), "KEEP"),
+            "gain-at-a-price": (([1, 1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0], 0.3, 0.1), "TRIM"),
+            "no-gain-costlier": (([1, 0, 1, 0, 1, 0], [1, 0, 1, 0, 0, 1], 0.2, 0.1), "CUT"),
+            "ceiling": (([1, 1, 1], [1, 1, 1], 0.1, 0.1), "CUT"),
+            "loss": (([0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 0], 0.1, 0.1), "CUT"),
+            "cheaper": (([1, 0, 1, 1, 0, 1], [1, 1, 0, 1, 0, 1], 0.05, 0.1), "KEEP"),
+            "noise": (([1, 1, 0], [1, 0, 0], 0.1, 0.1), "UNPROVEN"),
+        }
+        for label, ((w, wo, cw, cwo), want) in cases.items():
+            res = self.t / label / "r1"
+            result_file(res, w, wo, cw, cwo)
+            ab = ew.ab_report(self.t / label, [str(res)])
+            self.assertEqual(ew.verdict(lean, ab)[0], want, f"{label}: {ab}")
+
+    def test_ab_counts_only_value_cases_and_the_latest_run(self):
+        u = self.skill("u", SPECIFIC_SKILL)
+        (u / "evals").mkdir()
+        (u / "evals" / "evals.json").write_text(json.dumps({"skill": "build-box", "evals": [
+            {"id": "trigger-1", "kind": "trigger", "prompt": "x"}, {"id": "action-1", "kind": "action", "prompt": "y"}]}), encoding="utf-8")
+        result_file(u / "evals" / "results" / "a", [0, 0, 0], [0, 0, 0], when="2026-09-01T00:00:00Z")
+        result_file(u / "evals" / "results" / "b", [1, 1, 1], [0, 0, 0], when="2026-09-02T00:00:00Z")
+        result_file(u / "evals" / "results" / "c", [1, 1, 1], [0, 0, 0], name="trigger-1", when="2026-09-03T00:00:00Z")
+        ab = ew.ab_report(u)
+        self.assertEqual([c["case"] for c in ab["cases"]], ["action-1"])
+        self.assertEqual(ab["pass_with"], 1.0)
+
+    def test_record_writes_the_verdict_and_audit_flags_it(self):
+        u = self.skill("rec", GENERIC_SKILL)
+        eg.main(["init", str(u), "--name", "rec", "--topic", "t", "--kind", "skill", "--tier", "moderate"])
+        out = capture(["worth", str(u), "--record", "--no-peers"])
+        self.assertIn("SUSPECT", out)
+        _, st = eg.load_state(u)
+        self.assertEqual(st["worth"]["skills"]["code-quality"]["verdict"], "SUSPECT")
+        self.assertIn("worth:SUSPECT", ew.worth_flags(st))
+        fr = eg.unit_flags(u, st, eg.freshness(st))
+        self.assertIn("worth:SUSPECT", fr["flags"])
+
+    def test_an_edit_that_adds_general_advice_is_flagged(self):
+        u = self.skill("repo/skills/build-box", SPECIFIC_SKILL)
+        repo = self.t / "repo"
+        for args in (["init", "-q"], ["config", "user.name", "T"], ["config", "user.email", "t@example.com"],
+                     ["add", "-A"], ["commit", "-q", "-m", "lean"]):
+            subprocess.run(["git"] + args, cwd=str(repo), check=True, capture_output=True)
+        padding = "\n".join(GENERIC_SKILL.split("---", 2)[2].splitlines()[4:]) * 2
+        (u / "SKILL.md").write_text(SPECIFIC_SKILL + "\n## General guidance\n\n" + padding, encoding="utf-8")
+        r = ew.static_report(u / "SKILL.md", against="HEAD", peers=False, uses=False)
+        self.assertIsNotNone(r["change"])
+        self.assertTrue(any(w.startswith("this edit adds") for w in r["warnings"]), r["warnings"])
+
+    def test_peer_overlap_warns_unless_the_descriptions_name_each_other(self):
+        a = self.skill("pk/skills/alpha", "---\nname: alpha\ndescription: Render sprites and textures for the game with ComfyUI on the Mac.\n---\nbody\n")
+        self.skill("pk/skills/beta", "---\nname: beta\ndescription: Render sprites and textures for the game with ComfyUI on the Mac quickly.\n---\nbody\n")
+        self.skill("pk/skills/gamma", "---\nname: gamma\ndescription: Publish release notes to the team channel after a tag is pushed.\n---\nbody\n")
+        real = ew.peer_skill_files  # only the fixture's skills, whatever this machine has installed
+        ew.peer_skill_files = lambda target, extra=None: sorted((self.t / "pk" / "skills").glob("*/SKILL.md"))
+        self.addCleanup(setattr, ew, "peer_skill_files", real)
+        self.assertLess(ew.tfidf_cosine("Render sprites with ComfyUI", {"x": "Publish release notes"})[0][0], 0.1)
+        r = ew.static_report(a / "SKILL.md", uses=False)
+        self.assertEqual(r["nearest_peer"]["skill"], "beta")
+        self.assertTrue(any("close to beta" in w for w in r["warnings"]))
+        (a / "SKILL.md").write_text("---\nname: alpha\ndescription: Render sprites and textures for the game with ComfyUI on the Mac. Not for quick drafts (beta).\n---\nbody\n", encoding="utf-8")
+        r = ew.static_report(a / "SKILL.md", uses=False)
+        self.assertFalse(any("close to beta" in w for w in r["warnings"]))
+
+    def test_unreferenced_bundled_files_are_named(self):
+        u = self.skill("files", SPECIFIC_SKILL)
+        (u / "references").mkdir()
+        (u / "references" / "msvc.md").write_text("x", encoding="utf-8")
+        (u / "references" / "orphan.md").write_text("x", encoding="utf-8")
+        self.assertEqual(ew.unreferenced_files(u, (u / "SKILL.md").read_text(encoding="utf-8")), ["references/orphan.md"])
+
+    def test_hook_warns_once_per_session_and_ignores_other_files(self):
+        u = self.skill("hook", GENERIC_SKILL)
+
+        def hook(payload):
+            buf = io.StringIO()
+            old = sys.stdin
+            sys.stdin = io.StringIO(json.dumps(payload))
+            try:
+                with contextlib.redirect_stdout(buf):
+                    eg.main(["worth-hook"])
+            finally:
+                sys.stdin = old
+            return buf.getvalue()
+
+        p = {"session_id": "s1", "tool_name": "Edit", "tool_input": {"file_path": str(u / "SKILL.md")}}
+        first = hook(p)
+        self.assertEqual(json.loads(first)["hookSpecificOutput"]["hookEventName"], "PostToolUse")
+        self.assertIn("SUSPECT", first)
+        self.assertEqual(hook(p), "")
+        self.assertNotEqual(hook(dict(p, session_id="s2")), "")
+        self.assertEqual(hook({"tool_input": {"file_path": str(self.t / "x.py")}}), "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

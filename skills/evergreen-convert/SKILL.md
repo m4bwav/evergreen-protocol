@@ -50,7 +50,7 @@ While converting, note anything platform-bound in the skill's scripts or instruc
 
 ## Step 4: verify
 
-`EG links <unit>` and `EG lint <unit>`. Fix anything reported. Then `EG status <unit>`: if the unit is already past due (old research), tell the user and offer to run `evergreen-refresh` now; if it has a suite that has never run, offer `evergreen-test`.
+`EG links <unit>` and `EG lint <unit>`. Fix anything reported. Then `EG status <unit>`: if the unit is already past due (old research), tell the user and offer to run `evergreen-refresh` now; if it has a suite that has never run, offer `evergreen-test`. For a skill, `EG worth <unit>` too: a SUSPECT or CUT reading goes to the user before the maintenance layer is added, since a skill not worth keeping is not worth maintaining.
 
 ## Step 5: report
 

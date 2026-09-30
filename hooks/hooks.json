@@ -31,6 +31,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/evergreen-hook.sh\" worth",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

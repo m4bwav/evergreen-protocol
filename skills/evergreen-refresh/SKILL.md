@@ -38,7 +38,7 @@ Write, newest first, with delta edits only:
 2. Main file: edit the changed claims in place. Do not rewrite sections that did not change.
 3. CHANGELOG.md: one `C-YYYYMMDD-n` per change with `because: R-...` and `files:` (file plus section heading). Back-fill `applied: C-...` on the finding.
 4. LEARNINGS.md: only if there is a procedural lesson beyond "the fact changed".
-5. Tests: when step 2 touched the main file of a skill, run its suite (`evergreen-test`; the trigger cases at least when only the description changed) before Step 4, and log the `T-` entry. A refresh that breaks a case hands it to `evergreen-tune` and says so in the report.
+5. Tests: when step 2 touched the main file of a skill, run its suite (`evergreen-test`; the trigger cases at least when only the description changed) before Step 4, and log the `T-` entry. A refresh that breaks a case hands it to `evergreen-tune` and says so in the report. Then `EG worth <skill> --against HEAD` (TESTING.md §8): an edit that added mostly general text, or grew the body by half, is named in the report.
 
 If a finding contradicts an active learning, retire the learning (archive with reason) and say so.
 

@@ -69,6 +69,8 @@ EG tested <unit> --passed N --failed M [--failing ids] --harness <name> --note "
 
 Write the `T-` entry in TESTS.md with `led to: L-..., C-..., R-...`; log the `C-` entry in CHANGELOG.md with `because: T-..., L-...` (and `R-...` when Step 4 ran); back-fill `applied:` on any finding. When the run is clean, `failing` is cleared by `tested`; `EG flag <unit> --clear-failing <id>` clears one by hand.
 
+After a clean run, `EG worth <skill> --against HEAD` (TESTING.md §8): a fix that passes by adding mostly general text is worth a second, shorter try. A baseline that keeps winning is the `evergreen-worth` CUT case: recommend retiring, do not keep tuning.
+
 Still failing: next iteration from Step 2 with the new evidence. After the third, stop.
 
 ## Step 7: report
