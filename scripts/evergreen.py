@@ -26,6 +26,9 @@ Commands
                                     record a suite run; prints the next T- id for TESTS.md
   failed  <unit> --case ID --class CLASS [--note ..]   record a failure seen in use; says whether research is due first
   eval-export <unit> [--out DIR] [--force]   write `claude plugin eval` case folders from evals/evals.json
+  worth   <skill|plugin|folder> [--against REV] [--results P ...] [--record] [--json]
+                                    is a skill worth its tokens? static signals + the with/without A/B (evergreen_worth.py)
+  worth-hook                        PostToolUse hook body (stdin JSON): warn once when an edited SKILL.md reads as mostly cost
   use-log                           PostToolUse hook body (stdin JSON): append a Skill use to EVERGREEN_HOME/uses.jsonl
   uses    [--skill NAME] [--days 7] [--limit 20] [--json]   recent skill uses, newest first
   map-slug <repo>                   slug for a repo path
@@ -1648,6 +1651,11 @@ def cmd_home(a):
 def unit_flags(d: Path, st: dict, fr: dict) -> dict:
     """Add the flags that never change the freshness status: test state, and learnings past consolidate_every."""
     fr["flags"] += test_flags(st)
+    try:
+        import evergreen_worth as ew
+        fr["flags"] += ew.worth_flags(st)  # a recorded CUT, TRIM or SUSPECT verdict (`worth --record`)
+    except Exception:
+        pass
     cons = consolidation_due(d, st)
     if cons:
         fr["flags"].append(f"consolidate:{cons[0]}>{cons[1]}")
@@ -1703,7 +1711,7 @@ def cmd_audit(a):
             continue
         if a.brief:  # the session-start line only carries what needs a decision now; untested and overdue wait for an audit,
             # and a verify-at-use unit is news only when some of its claims are due
-            fr["flags"] = [f for f in fr["flags"] if f not in ("untested", "tests-overdue")
+            fr["flags"] = [f for f in fr["flags"] if f not in ("untested", "tests-overdue") and not f.startswith("worth:")
                            and not (f == "verify-at-use" and not fr.get("claims_due"))]
         if a.brief and fr["status"] != "STALE" and not fr["flags"]:
             continue
@@ -2264,6 +2272,11 @@ def main(argv=None):
         es.add_parsers(sp, common)  # where, baseline, diff, notify, merge
     except Exception as e:  # the sync module is optional; the core keeps working without it
         print(f"[evergreen] sync commands unavailable: {e}", file=sys.stderr)
+    try:
+        import evergreen_worth as ew
+        ew.add_parsers(sp, common)  # worth, worth-hook
+    except Exception as e:  # optional like the sync module
+        print(f"[evergreen] worth commands unavailable: {e}", file=sys.stderr)
 
     a = p.parse_args(argv)
     if not a.cmd:

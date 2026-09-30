@@ -145,6 +145,34 @@
       ],
       "runs": 3,
       "baseline": "2026-09-13 claude plugin eval, no plugin: no evergreen skill fired 3/3 (correct)"
+    },
+    {
+      "id": "trigger-7",
+      "kind": "trigger",
+      "prompt": "I've been adding sections to my deploy skill all week and it's getting long. Honestly I'm not sure it does anything Claude wouldn't do anyway. Is it worth keeping?",
+      "expectations": [
+        "the evergreen-worth skill is invoked"
+      ],
+      "runs": 3
+    },
+    {
+      "id": "trigger-8",
+      "kind": "trigger",
+      "prompt": "Before I commit this update to my code-review skill, tell me whether what I added is actually useful to the model or just bloat.",
+      "expectations": [
+        "the evergreen-worth skill is invoked"
+      ],
+      "runs": 3
+    },
+    {
+      "id": "decoy-4",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "Is the left-pad package worth adding as a dependency to my web app, or is it just bloat I should write myself?",
+      "expectations": [
+        "no evergreen skill is invoked: a dependency question about the user's application, not a skill"
+      ],
+      "runs": 3
     }
   ]
 }

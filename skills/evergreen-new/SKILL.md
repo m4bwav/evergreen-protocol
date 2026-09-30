@@ -49,9 +49,11 @@ Fill RESEARCH.md properly: Current understanding (what the skill asserts and how
 
 ## Step 4: prove it, then hand over
 
-`EG links <skill-dir>` and `EG lint <skill-dir>`. Then `evergreen-test`: fill `evals/evals.json` (at least two trigger prompts in the user's own phrasing, two decoys, one action case with evidence outside the transcript, one outcome case), run the baseline without the skill, run the suite, log the `T-` entry. skill-creator's own eval loop and description improver, when installed, are the harness; the suite is in its format. A failing case goes to `evergreen-tune` before hand-over, three iterations at most.
+Worth first (`evergreen-worth`, TESTING.md §8): `EG worth <skill-dir>` on the draft. SUSPECT or a warning means the draft is mostly advice the model already follows, bloat, or a near copy of another skill: tell the user in one or two lines and cut before building the suite, since a self-written skill scores below no skill until it is tested. `EG links <skill-dir>` and `EG lint <skill-dir>`. Then `evergreen-test`: fill `evals/evals.json` (at least two trigger prompts in the user's own phrasing, two decoys, one action case with evidence outside the transcript, one outcome case), run the baseline without the skill, run the suite, log the `T-` entry. skill-creator's own eval loop and description improver, when installed, are the harness; the suite is in its format. A failing case goes to `evergreen-tune` before hand-over, three iterations at most.
 
-Tell the user: skill name, where it lives, tier and next due date, the test result (passed/total by kind, any case still failing and why), and that it will announce when it is due or has a failing test and act after the task. A skill is never handed over on the strength of its description alone.
+With an action or outcome case run under `claude plugin eval`, read the A/B with `EG worth <skill-dir> --record` and hand over its verdict; a CUT goes to the user as a recommendation not to keep the skill.
+
+Tell the user: skill name, where it lives, tier and next due date, the test result (passed/total by kind, any case still failing and why), the worth verdict, and that it will announce when it is due or has a failing test and act after the task. A skill is never handed over on the strength of its description alone.
 
 ## Placing it
 
