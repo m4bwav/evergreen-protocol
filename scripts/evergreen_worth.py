@@ -194,7 +194,8 @@ def tfidf_cosine(target: str, peers: dict[str, str]) -> list[tuple[float, str]]:
         tf: dict[str, int] = {}
         for w in ts:
             tf[w] = tf.get(w, 0) + 1
-        return {w: c * math.log((1 + n) / (1 + df[w])) + 0.0 for w, c in tf.items()}
+        # smoothed IDF (+1): with only two or three skills, plain IDF gives every shared word zero weight
+        return {w: c * (math.log((1 + n) / (1 + df[w])) + 1.0) for w, c in tf.items()}
 
     tv = vec(toks["\0target"])
     tn = math.sqrt(sum(x * x for x in tv.values())) or 1.0

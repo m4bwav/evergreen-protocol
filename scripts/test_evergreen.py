@@ -1511,6 +1511,11 @@ class Worth(unittest.TestCase):
     def test_peer_overlap_warns_unless_the_descriptions_name_each_other(self):
         a = self.skill("pk/skills/alpha", "---\nname: alpha\ndescription: Render sprites and textures for the game with ComfyUI on the Mac.\n---\nbody\n")
         self.skill("pk/skills/beta", "---\nname: beta\ndescription: Render sprites and textures for the game with ComfyUI on the Mac quickly.\n---\nbody\n")
+        self.skill("pk/skills/gamma", "---\nname: gamma\ndescription: Publish release notes to the team channel after a tag is pushed.\n---\nbody\n")
+        real = ew.peer_skill_files  # only the fixture's skills, whatever this machine has installed
+        ew.peer_skill_files = lambda target, extra=None: sorted((self.t / "pk" / "skills").glob("*/SKILL.md"))
+        self.addCleanup(setattr, ew, "peer_skill_files", real)
+        self.assertLess(ew.tfidf_cosine("Render sprites with ComfyUI", {"x": "Publish release notes"})[0][0], 0.1)
         r = ew.static_report(a / "SKILL.md", uses=False)
         self.assertEqual(r["nearest_peer"]["skill"], "beta")
         self.assertTrue(any("close to beta" in w for w in r["warnings"]))
