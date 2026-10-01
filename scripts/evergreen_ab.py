@@ -43,6 +43,9 @@ TOOLS = {
 MAX_TURNS = {"action": 40, "outcome": 12}
 UNRESOLVED = re.compile(r"<[A-Za-z][\w -]*>")
 SHELL_TOOLS = "Bash|PowerShell|run_in_terminal"
+PERMISSION_REFUSED = re.compile(r"requested permissions|sensitive file|requires approval|permission to use", re.I)
+USAGE_LIMIT = re.compile(r"usage limit|rate limit|limit reached|credit balance is too low", re.I)
+PLACEHOLDER_DIRS = ("fixture", "vault", "repo", "folder", "dir")
 
 
 def tool_regex(tool: str) -> str:
@@ -83,7 +86,7 @@ def localize(parts: list[str], run: Path, home: Path | None) -> list[str]:
         if re.search(r"\.(py|mjs|cjs|js|sh|ps1)$", p) and not (run / p).exists() and home is not None:
             for base in (home, home.parent, home.parent.parent):
                 if (base / p).exists():
-                    parts[i] = str(base / p)
+                    parts[i] = str((base / p).resolve())  # absolute: the check runs in the run folder, not here
                     break
     if parts and parts[0] in ("python", "python3"):
         parts[0] = shutil.which("python") or shutil.which("python3") or parts[0]
@@ -120,12 +123,20 @@ def run_claude(prompt: str, cwd: Path, extra: list[str], timeout: int = 1800) ->
 
 def parse_stream(out: str) -> dict:
     """Tool calls in order, the final answer, and the result event's cost, turns and error flag."""
-    uses, result = [], {}
+    uses, result, init, refused = [], {}, None, []
     for line in out.splitlines():
         try:
             ev = json.loads(line)
         except ValueError:
             continue
+        if ev.get("type") == "system" and ev.get("subtype") == "init":
+            init = ev
+        elif ev.get("type") == "user":
+            for c in (ev.get("message") or {}).get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("is_error"):
+                    text = str(c.get("content") or "")
+                    if PERMISSION_REFUSED.search(text):
+                        refused.append(text[:200])
         if ev.get("type") == "assistant":
             for c in (ev.get("message") or {}).get("content") or []:
                 if isinstance(c, dict) and c.get("type") == "tool_use":
@@ -133,7 +144,25 @@ def parse_stream(out: str) -> dict:
         elif ev.get("type") == "result":
             result = ev
     return {"uses": uses, "answer": str(result.get("result") or ""), "cost": float(result.get("total_cost_usd") or 0),
-            "turns": int(result.get("num_turns") or 0), "error": bool(result.get("is_error")) or not result}
+            "turns": int(result.get("num_turns") or 0), "error": bool(result.get("is_error")) or not result,
+            "skills": None if init is None else [str(x) for x in init.get("skills") or []], "refused": refused}
+
+
+def environment_fault(res: dict, arm: str, name: str) -> str | None:
+    """Why a run measured the harness instead of the skill, or None. A with-arm run whose init event does not list the
+    skill never had it (a relative --plugin-dir once pointed at the run folder itself); a refused write to a file the
+    run should own means the folder is protected; a usage limit stops the run. These runs leave the counts."""
+    loaded = any(s.split(":")[-1] == name for s in res.get("skills") or [])
+    if arm == "with" and res.get("skills") is not None and not loaded:
+        return "the skill was not loaded in the with arm (not in the init event's skills)"
+    if arm == "without" and loaded:
+        return "the skill was loaded in the without arm (baseline contaminated)"
+    sensitive = [r for r in res.get("refused") or [] if "sensitive file" in r]
+    if sensitive:
+        return f"writes in the run folder were refused: {sensitive[0][:120]}"
+    if USAGE_LIMIT.search(res.get("answer") or "") and res.get("turns", 0) <= 2:
+        return "usage limit"
+    return None
 
 
 def isolation_args(blind: bool) -> list[str]:
@@ -202,10 +231,13 @@ def first_prompt(unit: Path | None, skill_dir: Path, skill: str) -> str | None:
 
 def probe(skill_dir: Path, unit: Path | None, prompt: str | None = None, out: str | None = None,
           model: str | None = None, blind: bool = False) -> dict:
+    skill_dir, unit = skill_dir.resolve(), (unit.resolve() if unit else None)
     text = (skill_dir / "SKILL.md").read_text(encoding="utf-8", errors="replace")
     fm, body = ew.parse_frontmatter(text)
     name = fm.get("name") or skill_dir.name
     task = prompt or first_prompt(unit, skill_dir, name) or (fm.get("description") or "").split(". Use")[0]
+    # a case prompt's <fixture> would make the probe discuss the placeholder instead of the job
+    task = UNRESOLVED.sub(lambda m: f"the {m.group(0)[1:-1]} folder", task)
     anchors = key_anchors(body, name)
     work = Path(tempfile.mkdtemp(prefix=f"probe-{name}-"))
     extra = isolation_args(blind) + ["--disable-slash-commands", "--max-turns", "2", "--tools", ""]
@@ -358,12 +390,12 @@ def answer_regexes(case: dict) -> list[str]:
 
 
 def grade_case(case: dict, run: Path, res: dict, variables: dict[str, str], base_commit: str | None):
-    if case.get("evidence"):
-        return grade(case["evidence"], run, res, variables, base_commit)
     rx = answer_regexes(case)
-    if rx:
-        return all(re.search(r, res["answer"], re.I | re.S) for r in rx)
-    return None  # judged only by prose expectations: needs a judge, not this grader
+    said = all(bool(re.search(r, res["answer"], re.I | re.S)) for r in rx) if rx else None
+    if case.get("evidence"):
+        did = grade(case["evidence"], run, res, variables, base_commit)
+        return did if said is None else tri_and([did, said])  # the result and what the reply tells the user
+    return said  # None: judged only by prose expectations, which needs a judge, not this grader
 
 
 # ---------- the A/B ----------
@@ -402,6 +434,21 @@ def prepare(case: dict, evals_home: Path, run: Path) -> str | None:
     return r.stdout.decode().strip() or None
 
 
+def case_prompt(case: dict, variables: dict[str, str]) -> str:
+    """The prompt as the run sees it: --var values first, then <fixture> (and <vault>, <repo>, <folder>, <dir>) as the
+    folder the case's files land in: its first `files` folder, or the run folder itself for a `fixture`."""
+    s = str(case.get("prompt") or "")
+    for k, v in variables.items():
+        if not k.startswith("__"):
+            s = s.replace(f"<{k}>", v)
+    dirs = [f for f in case.get("files") or [] if not re.search(r"\.\w{1,5}$", f)]
+    where = dirs[0] if dirs else ("." if case.get("fixture") else None)
+    if where:
+        for k in PLACEHOLDER_DIRS:
+            s = s.replace(f"<{k}>", where)
+    return s
+
+
 def one_run(case: dict, arm: str, n: int, skill_dir: Path, name: str, evals_home: Path, out: Path,
             variables: dict[str, str], model: str | None, blind: bool) -> dict:
     run = Path(tempfile.mkdtemp(prefix=f"ab-{name}-{case['id']}-{arm}-{n}-"))
@@ -417,23 +464,33 @@ def one_run(case: dict, arm: str, n: int, skill_dir: Path, name: str, evals_home
         else:
             shutil.copytree(skill_dir, run / ".claude" / "skills" / name,
                             ignore=shutil.ignore_patterns(".git", "evals", "__pycache__"))
-    raw, secs, code = run_claude(str(case["prompt"]), run, extra)
+    raw, secs, code = run_claude(case_prompt(case, variables), run, extra)
     (out / f"{case['id']}-{arm}-{n}.jsonl").write_text(raw, encoding="utf-8")
     res = parse_stream(raw)
     fired = any(u["name"] == "Skill" and str((u["input"] or {}).get("skill", "")).split(":")[-1] == name for u in res["uses"])
-    passed = None if res["error"] and not res["uses"] else grade_case(case, run, res, variables, base)
-    return {"passed": bool(passed), "error": passed is None or (res["error"] and not res["uses"]),
-            "ungradable": passed is None, "skill_fired": fired, "turns": res["turns"], "durationSeconds": round(secs),
-            "costUsd": res["cost"], "exit": code, "workdir": str(run)}
+    env = environment_fault(res, arm, name)
+    passed = None if (res["error"] and not res["uses"]) or env else grade_case(case, run, res, variables, base)
+    r = {"passed": bool(passed), "error": passed is None or (res["error"] and not res["uses"]),
+         "ungradable": passed is None and not env, "skill_fired": fired, "turns": res["turns"],
+         "durationSeconds": round(secs), "costUsd": res["cost"], "exit": code, "workdir": str(run)}
+    if env:
+        r["environment"] = env
+    return r
 
 
 def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | None = None, out: str | None = None,
            model: str | None = None, variables: dict[str, str] | None = None, blind: bool = False,
-           concurrency: int = 3) -> Path | None:
+           concurrency: int = 3, append: bool = False, arms: tuple[str, ...] = ("with", "without")) -> Path | None:
+    """Run the value cases; with `append`, add the runs to the aggregate-result.json already in `out` (a top-up
+    inside the noise margin) instead of replacing it. `arms=("with",)` re-runs only the skill's arm, for an edited skill
+    measured against the baseline already in `out` (the baseline does not change when only the skill does)."""
     import fnmatch
     if blind and not os.environ.get("ANTHROPIC_API_KEY"):
         print("[worth --ab] --blind needs ANTHROPIC_API_KEY (`claude --bare` skips OAuth); run without it, or set the key")
         return None
+    # absolute paths: every run starts in its own folder, so a relative skill path would point --plugin-dir at the
+    # run folder itself (no skill, and its files protected as plugin files) and checker scripts would not be found
+    skill_dir, unit = skill_dir.resolve(), (unit.resolve() if unit else None)
     fm, _ = ew.parse_frontmatter((skill_dir / "SKILL.md").read_text(encoding="utf-8", errors="replace"))
     name = fm.get("name") or skill_dir.name
     homes = [h for h in (skill_dir, unit) if h is not None and (h / "evals" / "evals.json").exists()]
@@ -450,10 +507,17 @@ def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | N
         return None
     dest = Path(out).expanduser() if out else Path(tempfile.mkdtemp(prefix=f"worth-ab-{name}-"))
     dest.mkdir(parents=True, exist_ok=True)
-    jobs = [(c, arm, n) for c in cases for arm in ("with", "without") for n in range(1, runs + 1)]
-    print(f"[worth --ab] {name}: {len(cases)} value case(s) x 2 arms x {runs} runs = {len(jobs)} headless runs -> {dest}")
-    started = datetime.now().isoformat(timespec="seconds")
     results: dict[tuple[str, str], list[dict]] = {}
+    old_agg = None
+    if append and (dest / "aggregate-result.json").exists():
+        old_agg = json.loads((dest / "aggregate-result.json").read_text(encoding="utf-8"))
+        for c in old_agg.get("cases") or []:
+            for arm, rs in (c.get("arms") or {}).items():
+                results[(c["name"], arm)] = list(rs)
+    jobs = [(c, arm, len(results.get((c["id"], arm), [])) + n) for c in cases for arm in arms
+            for n in range(1, runs + 1)]
+    print(f"[worth --ab] {name}: {len(cases)} value case(s) x {len(arms)} arm(s) x {runs} runs = {len(jobs)} headless runs -> {dest}")
+    started = (old_agg or {}).get("startedAt") or datetime.now().isoformat(timespec="seconds")
     with cf.ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
         var = {**(variables or {}), "__home__": str(home)}
         futs = {pool.submit(one_run, c, arm, n, skill_dir, name, home, dest, var, model, blind): (c["id"], arm)
@@ -466,8 +530,10 @@ def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | N
                 r = {"passed": False, "error": True, "ungradable": False, "skill_fired": False, "turns": 0,
                      "durationSeconds": 0, "costUsd": 0.0, "note": str(e)[:200]}
             results.setdefault((cid, arm), []).append(r)
-            print(f"  {cid:24} {arm:7} {'ungradable' if r.get('ungradable') else 'pass' if r['passed'] else 'fail'}"
-                  f"{' (skill fired)' if r.get('skill_fired') else ''}  {r['durationSeconds']}s ${r['costUsd']:.2f}")
+            state = ("environment" if r.get("environment") else "ungradable" if r.get("ungradable")
+                     else "pass" if r["passed"] else "fail")
+            print(f"  {cid:24} {arm:7} {state}{' (skill fired)' if r.get('skill_fired') else ''}  "
+                  f"{r['durationSeconds']}s ${r['costUsd']:.2f}" + (f"  ({r['environment']})" if r.get("environment") else ""))
     agg = {"suite": {"ablation": "with-without", "harness": "evergreen.py worth --ab (claude -p, stream-json)",
                      "isolation": "--bare (blind)" if blind else "--setting-sources project (the user's CLAUDE.md loads in both arms)",
                      "skill": name, "runs": runs},
@@ -478,6 +544,10 @@ def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | N
         agg["cases"].append({"name": c["id"], "arms": {"with": w, "without": wo}})
         if all(r.get("ungradable") for r in w + wo):
             notes.append(f"{c['id']}: ungradable here (placeholders or a judge-only expectation); pass --var or grade by hand")
+        envs = [r for r in w + wo if r.get("environment")]
+        if envs:
+            notes.append(f"{c['id']}: {len(envs)} run(s) left out as environment faults, e.g. {envs[0]['environment']}; "
+                         f"fix the harness before reading the numbers")
         if w and not any(r.get("skill_fired") for r in w):
             notes.append(f"{c['id']}: the skill never fired in the with arm, so this case measures nothing; tune triggering first (evergreen-tune, undertrigger)")
         if any(r.get("skill_fired") for r in wo):

@@ -35,6 +35,7 @@ import json
 import math
 import os
 import re
+import tempfile
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -51,6 +52,8 @@ MIN_PROSE_FOR_SHARE = 8         # too few sentences to judge a share
 PLATITUDE_WARN = 4              # sentences of general advice with no specific anchor
 REPEAT_WARN = 0.12              # share of the body's 8-word shingles that occur twice or more
 DOC_OVERLAP_WARN = 0.25         # share of the body's 8-word shingles found in the repo's README, AGENTS.md or CLAUDE.md
+HEAVY_RUNS = 5                  # --heavy tops up to this many runs per arm while the gain is inside the margin
+HEAVY_MAX_USD = 15.0            # --heavy default spend cap, probe included
 PEER_COSINE_WARN = 0.45         # TF-IDF cosine between two skill descriptions that makes selection ambiguous
 MUST_WARN = 25                  # hard imperatives (MUST, ALWAYS, NEVER, "do not report done until") that turn optional work mandatory
 UPDATE_TOKENS_MIN = 150         # an edit smaller than this is never judged
@@ -582,20 +585,39 @@ def _unit_scripts(unit: Path) -> set[str]:
 
 
 def process_only(case: dict, scripts: set[str]) -> bool:
-    """True when every way the case can pass is a call to one of the unit's own scripts (or the Skill tool): the
-    baseline cannot pass it whatever result it produces, so a with-arm gain proves the route, not a better result."""
-    leaves = [x for x in _evidence_leaves(case.get("evidence")) if x.get("type") not in ("sequence",)]
-    if not leaves:
-        return False
-    for leaf in leaves:
-        if leaf.get("type") != "trace":
+    """True when every way the case can pass needs a call to one of the unit's own scripts (or the Skill tool): the
+    baseline cannot pass it whatever result it produces, so a with-arm gain proves the route, not a better result.
+    The evidence is read as the A/B grader reads it: `and`, `all` and a sequence's steps are all required, so one
+    required script leaf is enough; `or` and `any` are alternatives, so every one of them must need the script."""
+    return bool(_route_only(case.get("evidence"), scripts))
+
+
+def _route_only(ev, scripts: set[str]) -> bool | None:
+    """True: this evidence passes only through the unit's own route; False: a result can pass it; None: no evidence."""
+    if not isinstance(ev, dict):
+        return None
+
+    def leaf(x: dict) -> bool:
+        if x.get("type") == "sequence":
+            return any(leaf({"type": "trace", **st}) for st in x.get("steps") or [])
+        if x.get("type") != "trace":
             return False
-        if str(leaf.get("tool") or "") == "Skill":
-            continue
-        pat = str(leaf.get("input_match") or "") + " " + str(leaf.get("must_contain") or "")
-        if not any(m.group(1).lower() in scripts for m in SCRIPT_RE.finditer(pat)):
-            return False
-    return True
+        if str(x.get("tool") or "") == "Skill":
+            return True
+        pat = str(x.get("input_match") or "") + " " + str(x.get("must_contain") or "")
+        return any(m.group(1).lower() in scripts for m in SCRIPT_RE.finditer(pat))
+
+    required = [leaf(ev)] if ev.get("type") else []
+    required += [_route_only(ev.get("and"), scripts)] + [_route_only(x, scripts) for x in ev.get("all") or []]
+    alts = [a for a in (_route_only(x, scripts) for x in ev.get("any") or []) if a is not None]
+    if alts:
+        required.append(all(alts))
+    required = [r for r in required if r is not None]
+    v = any(required) if required else None
+    other = _route_only(ev.get("or"), scripts)
+    if other is not None:
+        v = bool(v) and other
+    return v
 
 
 def evidence_report(unit: Path, skill: str | None = None) -> dict:
@@ -619,6 +641,55 @@ def evidence_report(unit: Path, skill: str | None = None) -> dict:
     return rep
 
 
+EDIT_VERBS = re.compile(r"\b(convert|fix|rewrite|rename|edit|update|change|write|add|create|replace|move|delete)\b", re.I)
+
+
+def case_lint(evals_home: Path, skill: str | None = None) -> list[str]:
+    """Problems in the value cases themselves that make an A/B measure nothing or the wrong thing, found before a run is
+    paid for: placeholders the runner cannot fill, checks it cannot run, too few tools, a misused `redundant`, and a
+    check behind a path the run may never write. Route-only graders are a gap only when every value case is one
+    (evidence_gaps): a case that proves the skill's own route is still right for evergreen-test."""
+    import evergreen_ab as eab
+    out = []
+    try:
+        json.loads((evals_home / "evals" / "evals.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return [f"evals/evals.json does not parse ({str(e)[:80]}); every count above reads it as empty"]
+    for cid, c in sorted(case_kinds(evals_home).items()):
+        if skill and c.get("_skill", "").split(":")[-1] != skill:
+            continue
+        if c.get("kind") not in VALUE_KINDS or c.get("decoy"):
+            continue
+        filled = eab.case_prompt(c, {})
+        left = sorted(set(eab.UNRESOLVED.findall(filled)))
+        if left:
+            out.append(f"{cid}: the prompt keeps {', '.join(left)}; give the case `files` or `fixture`, pass --var, "
+                       f"or write the literal path")
+        ev, rx = c.get("evidence"), eab.answer_regexes(c)
+        if not ev and not rx:
+            out.append(f"{cid}: no evidence and no 'regex on the answer:' expectation; --ab cannot grade it")
+        for leaf in _evidence_leaves(ev):
+            t = leaf.get("type")
+            if t in ("file", "file_contains") and leaf.get("check") and not eab.CHECK_EXIT.match(str(leaf["check"])):
+                out.append(f"{cid}: the file check is not '<command> exits 0', so --ab cannot run it")
+            if t == "command" and (leaf.get("check") or leaf.get("must_change")):
+                out.append(f"{cid}: a command evidence with `check` is pseudo-code to --ab; write a script that exits 0")
+            path = str(leaf.get("path") or "")
+            if t in ("file", "file_contains") and leaf.get("check") and path and not re.search(r"[*?<]", path) \
+                    and not (evals_home / path).exists():
+                out.append(f"{cid}: the check runs only when {path} exists, and a right answer may name it differently; "
+                           f"point `path` at a file the fixture already has so the check is the whole judge")
+        tools = [str(x) for x in (c.get("allowed_tools") or []) + (c.get("tools") or [])]
+        if c.get("kind") == "outcome" and EDIT_VERBS.search(str(c.get("prompt") or "")) and not c.get("allowed_tools") \
+                and not any(re.match(r"(Edit|Bash|PowerShell)", x) for x in tools):
+            out.append(f"{cid}: an outcome case gets Read, Glob, Grep and Write and {eab.MAX_TURNS['outcome']} turns; "
+                       f"the prompt asks for changes, so add Edit and a shell in `tools` (and `max_turns`)")
+        if c.get("redundant") and baseline_status({k: v for k, v in c.items() if k != "redundant"}) != "passed":
+            out.append(f"{cid}: `redundant` means it passed without the skill; with no dated baseline that says so it "
+                       f"only hides the case from --ab and counts as already known")
+    return out
+
+
 def failure_modes(st: dict, ev: dict | None, ab: dict | None, manual: dict | None = None) -> list[dict]:
     """The useless-skill failure modes the evidence points to (TESTING.md section 8), each with its evidence."""
     modes = []
@@ -635,7 +706,7 @@ def failure_modes(st: dict, ev: dict | None, ab: dict | None, manual: dict | Non
     if st.get("probe") and st["probe"].get("coverage") is not None and st["probe"]["coverage"] >= 0.8:
         modes.append({"mode": 2, "name": "already known",
                       "evidence": f"the knowledge probe covered {int(100 * st['probe']['coverage'])}% of the key anchors"})
-    if ab:
+    if ab and not (ab.get("pass_with") == 0 and ab.get("pass_without") == 0):
         if ab["delta"] <= -ab["margin"]:
             modes.append({"mode": 4, "name": "worse", "evidence": f"pass rate {ab['delta'] * 100:+.0f} points with the skill"})
         elif ab["delta"] < ab["margin"]:
@@ -801,7 +872,9 @@ def assess(target: Path, against: str | None = None, results: list[str] | None =
         evals_home = unit if unit is not None and (unit / "evals" / "evals.json").exists() else (
             f.parent if (f.parent / "evals" / "evals.json").exists() else None)
         if evals_home is not None:
-            ev = evidence_report(evals_home, skill=None if evals_home.resolve() == f.parent.resolve() else st["skill"])
+            own_home = evals_home.resolve() == f.parent.resolve()
+            ev = evidence_report(evals_home, skill=None if own_home else st["skill"])
+            st["lint"] = case_lint(evals_home, skill=None if own_home else st["skill"])
         v, why = verdict(st, ab)
         if ab and ev and ev["process_only"] and ab["delta"] >= ab["margin"]:
             gain = [c["case"] for c in ab["cases"] if c["delta"] > 0]
@@ -812,7 +885,8 @@ def assess(target: Path, against: str | None = None, results: list[str] | None =
             v, why = manual["verdict"], f"{manual.get('why') or 'set by hand'} (set by hand {manual.get('checked')})"
         st.update({"ab": ab, "evidence": ev, "verdict": v, "why": why, "unit": str(unit) if unit else None})
         st["modes"] = failure_modes(st, ev, ab, manual)
-        st["gaps"] = evidence_gaps(ev, ab)
+        # a recorded A/B (worth --record) measured the baseline even when its result files are elsewhere
+        st["gaps"] = evidence_gaps(ev, ab or (manual if manual and manual.get("delta") is not None else None))
         u = st.get("usage") or {}
         st["triage"] = round((st["listing_tokens"] + st["body_tokens"]) / (u.get("interactive", 0) + u.get("subagent", 0) + 1))
         out.append(st)
@@ -875,8 +949,33 @@ def render(r: dict) -> str:
         L.append(f"  mode {m['mode']}   {m['name']}: {m['evidence']}")
     for g in r.get("gaps") or []:
         L.append(f"  gap      {g}")
+    for x in r.get("lint") or []:
+        L.append(f"  case     {x}")
     for w in r["warnings"]:
         L.append(f"    - {w}")
+    return "\n".join(L)
+
+
+def render_lite(r: dict) -> str:
+    """The quick scan: cost, use, verdict and every issue on one screen, nothing that needs a model."""
+    u = r.get("usage") or {}
+    ev = r.get("evidence") or {}
+    L = [f"lite   {r['skill']}: {r['verdict']}  (listing ~{r['listing_tokens']:,} every session, body ~{r['body_tokens']:,} "
+         f"per use; {u.get('interactive', 0)} interactive + {u.get('subagent', 0)} subagent uses in {u.get('days', USAGE_DAYS)} "
+         f"days; {len(ev.get('value_cases') or [])} value case(s))"]
+    rec = recorded(Path(r["unit"]), r["skill"]) if r.get("unit") else None
+    if rec and not r.get("ab"):  # the last measured verdict, so a quick scan does not read as never tested
+        L.append(f"  recorded {rec.get('verdict')} on {rec.get('ruled') or rec.get('checked')}"
+                 + (f": {rec['delta'] * 100:+.0f} points at {rec.get('cost_ratio')}x the cost" if rec.get("delta") is not None else "")
+                 + (f" ({rec.get('why')})" if rec.get("manual") else ""))
+    issues = [f"mode {m['mode']} {m['name']}: {m['evidence']}" for m in r.get("modes") or []]
+    issues += [f"gap: {g}" for g in r.get("gaps") or []] + [f"case {x}" for x in r.get("lint") or []]
+    issues += [f"static: {w}" for w in r["warnings"]]
+    L += [f"  - {i}" for i in issues] or ["  no issues found on a quick scan; only --heavy (probe and A/B) shows the value"]
+    if r.get("lint"):
+        L.append("  next: fix the case issues first (they cost nothing), then --heavy for the measured verdict")
+    elif issues:
+        L.append("  next: --heavy for the measured verdict (probe, A/B, top-ups inside the margin)")
     return "\n".join(L)
 
 
@@ -1007,7 +1106,8 @@ def cmd_worth(a):
         if not results:
             print("[worth] no SKILL.md under the given paths")
             return
-        print(json.dumps(results, indent=2) if a.json else render_triage(results))
+        print(json.dumps(results, indent=2) if a.json else
+              "\n".join(render_lite(r) for r in results) if a.lite else render_triage(results))
         if a.record:
             for u in record(results):
                 print(f"[worth] recorded in {u}/evergreen.json")
@@ -1025,6 +1125,9 @@ def cmd_worth(a):
         print(f"[worth] {name}: {a.set} set by hand in {unit / 'evergreen.json'}")
         return
     probe_rep = None
+    if a.heavy:
+        a.probe, a.ab = not a.no_probe, True
+        a.out = a.out or str(Path(tempfile.mkdtemp(prefix="worth-heavy-")))
     if a.ab or a.probe:
         import evergreen_ab as eab
         files = find_skill_files(target)
@@ -1036,12 +1139,24 @@ def cmd_worth(a):
                                   model=a.model, blind=a.blind)
             print(eab.render_probe(probe_rep) + "\n")
         if a.ab:
-            out = eab.run_ab(files[0].parent, unit_for(files[0], target), runs=a.runs, case_glob=a.case, out=a.out,
-                             model=a.model, variables=dict(v.split("=", 1) for v in a.var or [] if "=" in v),
-                             blind=a.blind, concurrency=a.concurrency)
+            if a.heavy:
+                lint = case_lint(*_evals_home_for(files[0], target))
+                if lint:
+                    print("[worth --heavy] the cases have problems an A/B would pay for; fix them first (or pass --force):")
+                    for x in lint:
+                        print(f"  - {x}")
+                    if not a.force:
+                        return
+            variables = dict(v.split("=", 1) for v in a.var or [] if "=" in v)
+            ab_out = str(Path(a.out) / "ab") if a.heavy else a.out
+            out = eab.run_ab(files[0].parent, unit_for(files[0], target), runs=a.runs, case_glob=a.case, out=ab_out,
+                             model=a.model, variables=variables, blind=a.blind, concurrency=a.concurrency,
+                             append=a.append, arms=tuple(a.arm) if a.arm else ("with", "without"))
             if out is None:
                 return
             a.results = [str(out)]
+            if a.heavy:
+                _heavy_topup(a, files[0], target, out, variables, eab, (probe_rep or {}).get("cost_usd") or 0.0)
     if a.wrap:
         files = find_skill_files(target)
         if len(files) != 1:
@@ -1065,6 +1180,8 @@ def cmd_worth(a):
                                     recorded(Path(r0["unit"]) if r0.get("unit") else None, r0["skill"]))
     if a.json:
         print(json.dumps(results, indent=2))
+    elif a.lite:
+        print("\n".join(render_lite(r) for r in results))
     elif len(results) > 1 and not a.verbose:
         print(f"{'verdict':9} {'skill':34} {'listing':>8} {'body':>7} {'specific':>8}  A/B")
         for r in results:
@@ -1089,6 +1206,50 @@ def cmd_worth(a):
             print(f"[worth] recorded in {u}/evergreen.json")
     if a.strict and any(r["verdict"] in ("CUT", "SUSPECT") for r in results):
         sys.exit(1)
+
+
+def _evals_home_for(skill_md: Path, target: Path) -> tuple[Path, str | None]:
+    unit = unit_for(skill_md, target)
+    home = unit if unit is not None and (unit / "evals" / "evals.json").exists() else skill_md.parent
+    fm, _ = parse_frontmatter(skill_md.read_text(encoding="utf-8", errors="replace"))
+    return home, (None if home.resolve() == skill_md.parent.resolve() else (fm.get("name") or skill_md.parent.name))
+
+
+def _spent(out: Path) -> tuple[float, int]:
+    """Dollars and runs in an aggregate-result.json."""
+    try:
+        d = json.loads((out / "aggregate-result.json").read_text(encoding="utf-8"))
+    except Exception:
+        return 0.0, 0
+    runs = [r for c in d.get("cases") or [] for rs in (c.get("arms") or {}).values() for r in rs]
+    return sum(float(r.get("costUsd") or 0) for r in runs), len(runs)
+
+
+def _heavy_topup(a, skill_md: Path, target: Path, out: Path, variables: dict, eab, probe_cost: float) -> None:
+    """Heavy mode: while the gain sits inside the noise margin and runs per arm are under HEAVY_RUNS, add runs to the
+    same result folder, as long as the next batch stays under --max-usd."""
+    while True:
+        unit = unit_for(skill_md, target)
+        ab = ab_report(unit or skill_md.parent, [str(out)], case_glob=a.case)
+        spent, n = _spent(out)
+        spent += probe_cost
+        if ab is None or abs(ab["delta"]) >= ab["margin"] or (ab["pass_with"] == 0 and ab["pass_without"] == 0):
+            break
+        per_arm = min(ab["runs_with"], ab["runs_without"]) // max(1, len(ab["cases"]))
+        if per_arm >= HEAVY_RUNS:
+            break
+        more = HEAVY_RUNS - per_arm
+        batch = (spent - probe_cost) / max(1, n) * more * 2 * len(ab["cases"])
+        if spent + batch > a.max_usd:
+            print(f"[worth --heavy] inside the margin, but {more} more run(s) per arm (~${batch:.2f}) would pass "
+                  f"--max-usd {a.max_usd} (spent ${spent:.2f}); stopping")
+            break
+        print(f"[worth --heavy] {ab['delta'] * 100:+.0f} points is inside the {ab['margin'] * 100:.0f}-point margin: "
+              f"adding {more} run(s) per arm (~${batch:.2f}, spent ${spent:.2f} of {a.max_usd})")
+        eab.run_ab(skill_md.parent, unit, runs=more, case_glob=a.case, out=str(out), model=a.model,
+                   variables=variables, blind=a.blind, concurrency=a.concurrency, append=True)
+    spent, n = _spent(out)
+    print(f"[worth --heavy] {n} runs, ${spent + probe_cost:.2f}" + (" with the probe" if probe_cost else "") + f"; results in {out}")
 
 
 def cmd_worth_hook(a):
@@ -1135,6 +1296,16 @@ def add_parsers(sp, common):
     s = sp.add_parser("worth", parents=[common], help="is a skill worth its tokens? static signals plus the with-versus-without A/B")
     s.add_argument("target", nargs="+", help="a SKILL.md, a skill folder, a plugin root, or a folder of skill folders; "
                                              "several targets print the triage table")
+    s.add_argument("--lite", action="store_true", help="quick scan, no model calls (seconds): cost, use, verdict, and every "
+                   "issue in one list, including problems in the value cases that would waste an A/B")
+    s.add_argument("--heavy", action="store_true", help="thorough test: refuses on case problems, then the probe, the A/B on "
+                   "every value case, and top-up runs to 5 per arm while the gain is inside the noise margin, under --max-usd")
+    s.add_argument("--max-usd", type=float, default=HEAVY_MAX_USD, help=f"spend cap for --heavy top-ups (default {HEAVY_MAX_USD})")
+    s.add_argument("--no-probe", action="store_true", help="--heavy without the knowledge probe")
+    s.add_argument("--force", action="store_true", help="--heavy even when the case lint finds problems")
+    s.add_argument("--append", action="store_true", help="--ab adds its runs to the aggregate-result.json already in --out")
+    s.add_argument("--arm", action="append", choices=("with", "without"), help="--ab runs only this arm (with --append: "
+                   "re-measure an edited skill against the baseline already in --out)")
     s.add_argument("--triage", action="store_true", help="one row per skill, costliest per use first, with failure modes and evidence gaps")
     s.add_argument("--days", type=int, default=USAGE_DAYS, help=f"usage window in days (default {USAGE_DAYS})")
     s.add_argument("--probe", action="store_true", help="knowledge probe: ask a fresh headless session without the skill how it would do the job")

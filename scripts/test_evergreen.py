@@ -1650,10 +1650,15 @@ class WorthUseful(unittest.TestCase):
             {"id": "action-2", "kind": "action", "evidence": {"type": "trace", "tool": "Bash", "input_match": "tool\\.py",
                                                               "or": {"type": "file", "path": "out.md"}},
              "baseline": "2026-09-01: skill absent, passed anyway"},
+            {"id": "action-3", "kind": "action", "evidence": {"type": "trace", "tool": "Bash", "input_match": "tool\.py",
+                                                              "and": {"type": "file", "path": "out.md", "exists": True}}},
+            {"id": "action-4", "kind": "action", "evidence": {"type": "file", "path": "out.md",
+                                                              "check": "python evals/check.py out.md exits 0"}},
             {"id": "trigger-1", "kind": "trigger", "prompt": "p"}])
         ev = ew.evidence_report(u)
-        self.assertEqual(ev["value_cases"], ["action-1", "action-2"])
-        self.assertEqual(ev["process_only"], ["action-1"])
+        self.assertEqual(ev["value_cases"], ["action-1", "action-2", "action-3", "action-4"])
+        # a required script leaf joined by `and` makes the case route-only; an `or` alternative and a result check do not
+        self.assertEqual(ev["process_only"], ["action-1", "action-3"])
         self.assertEqual(ev["baseline"]["passed"], ["action-1", "action-2"])
         modes = ew.failure_modes({"usage": {"days": 60, "interactive": 0, "subagent": 0, "headless": 3},
                                   "installed": "user", "age_days": 30}, ev, None)
@@ -1719,6 +1724,71 @@ class WorthUseful(unittest.TestCase):
         for no in ("evergreen.json", "next_due", "the", "file", "search"):
             self.assertNotIn(no, a)
 
+
+    def test_ab_harness_lessons_from_the_obsidian_notes_run(self):
+        # <fixture> becomes the folder the case's files land in; --var wins; a `fixture` case uses the run folder
+        c = {"prompt": "lint <fixture> and <vault>", "files": ["evals/fixtures/vault"]}
+        self.assertEqual(eab.case_prompt(c, {}), "lint evals/fixtures/vault and evals/fixtures/vault")
+        self.assertEqual(eab.case_prompt(c, {"vault": "V"}), "lint evals/fixtures/vault and V")
+        self.assertEqual(eab.case_prompt({"prompt": "fix <repo>", "fixture": "f"}, {}), "fix .")
+        self.assertEqual(eab.case_prompt({"prompt": "read <doc>", "files": ["a.md"]}, {}), "read <doc>")
+        # runs that measured the harness: skill missing from the with arm, present in the without arm, refused writes
+        ok = {"skills": ["p:unit"], "refused": [], "answer": "", "turns": 9}
+        self.assertIsNone(eab.environment_fault(ok, "with", "unit"))
+        self.assertIn("not loaded", eab.environment_fault(dict(ok, skills=["agents-md"]), "with", "unit"))
+        self.assertIn("contaminated", eab.environment_fault(ok, "without", "unit"))
+        self.assertIn("refused", eab.environment_fault(dict(ok, skills=[], refused=["Claude requested permissions to edit "
+                                                                                    "x.md which is a sensitive file."]), "without", "unit"))
+        stream = "\n".join(json.dumps(e) for e in [
+            {"type": "system", "subtype": "init", "skills": ["p:unit"]},
+            {"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True,
+                                                      "content": "Claude requested permissions to edit a.md which is a sensitive file."}]}},
+            {"type": "result", "result": "done", "num_turns": 3, "total_cost_usd": 0.1}])
+        res = eab.parse_stream(stream)
+        self.assertEqual(res["skills"], ["p:unit"])
+        self.assertEqual(len(res["refused"]), 1)
+        # an answer regex is graded together with the evidence, not instead of it
+        run = self.t / "run3"
+        run.mkdir()
+        (run / "a.md").write_text("x", encoding="utf-8")
+        case = {"evidence": {"type": "file", "path": "a.md"}, "expectations": ["regex on the answer: nope\\.md"]}
+        self.assertTrue(eab.grade_case(case, run, {"uses": [], "answer": "left nope.md alone"}, {}, None))
+        self.assertFalse(eab.grade_case(case, run, {"uses": [], "answer": "all fixed"}, {}, None))
+        # a checker script found in the suite's home is run by absolute path from the run folder
+        home = self.t / "home3"
+        (home / "evals").mkdir(parents=True)
+        (home / "evals" / "check.py").write_text("import sys; sys.exit(0)\n", encoding="utf-8")
+        cwd = os.getcwd()
+        try:
+            os.chdir(self.t)
+            parts = eab.localize(["python", "evals/check.py"], run, Path("home3"))
+        finally:
+            os.chdir(cwd)
+        self.assertTrue(Path(parts[1]).is_absolute())
+
+    def test_case_lint_finds_what_would_waste_an_ab(self):
+        u = self.unit_with_cases([
+            {"id": "action-1", "kind": "action", "prompt": "lint <docs>", "evidence": {"type": "trace", "tool": "Bash"}},
+            {"id": "action-2", "kind": "action", "prompt": "p", "files": ["evals/fx"],
+             "evidence": {"type": "file", "path": "evals/fx/INDEX.md", "check": "python evals/c.py evals/fx exits 0"}},
+            {"id": "outcome-1", "kind": "outcome", "prompt": "convert the links",
+             "evidence": {"type": "command", "run": "python x.py", "check": "a == b"}},
+            {"id": "outcome-2", "kind": "outcome", "prompt": "explain it", "expectations": ["judge it"], "redundant": True},
+            {"id": "outcome-3", "kind": "outcome", "prompt": "convert the links", "tools": ["Edit"],
+             "expectations": ["regex on the answer: done"]}])
+        lint = "\n".join(ew.case_lint(u))
+        self.assertIn("action-1: the prompt keeps <docs>", lint)
+        self.assertIn("action-2: the check runs only when evals/fx/INDEX.md exists", lint)
+        self.assertIn("outcome-1: a command evidence with `check` is pseudo-code", lint)
+        self.assertIn("outcome-1: an outcome case gets Read", lint)
+        self.assertIn("outcome-2: no evidence", lint)
+        self.assertIn("outcome-2: `redundant` means", lint)
+        self.assertNotIn("outcome-3", lint)
+        (u / "evals" / "evals.json").write_text("{not json", encoding="utf-8")
+        self.assertIn("does not parse", ew.case_lint(u)[0])
+        # both arms at 0%: the verdict says the cases are broken, so no 'no gain' or 'worse' mode on top
+        dead = {"delta": 0.0, "margin": 0.33, "cost_ratio": 1.4, "pass_with": 0, "pass_without": 0}
+        self.assertEqual(ew.failure_modes({}, None, dead), [])
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
