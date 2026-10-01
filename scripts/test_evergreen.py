@@ -1776,6 +1776,9 @@ class WorthUseful(unittest.TestCase):
             {"id": "outcome-2", "kind": "outcome", "prompt": "explain it", "expectations": ["judge it"], "redundant": True},
             {"id": "outcome-3", "kind": "outcome", "prompt": "convert the links", "tools": ["Edit"],
              "expectations": ["regex on the answer: done"]}])
+        part = "2026-10-01, sonnet, worth --ab (T-1): without the skill 4 of 5 passed, the failure wrote wikilinks; with it 5 of 5"
+        self.assertEqual(ew.baseline_status({"baseline": part}), "failed")
+        self.assertEqual(ew.baseline_status({"baseline": part.replace("4 of 5", "5 of 5")}), "passed")
         lint = "\n".join(ew.case_lint(u))
         self.assertIn("action-1: the prompt keeps <docs>", lint)
         self.assertIn("action-2: the check runs only when evals/fx/INDEX.md exists", lint)

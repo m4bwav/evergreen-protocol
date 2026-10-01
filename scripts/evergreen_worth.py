@@ -534,6 +534,7 @@ def case_kinds(unit: Path) -> dict[str, dict]:
         return {}
 
 
+BASELINE_COUNT = re.compile(r"\b(\d+)\s*(?:of|/)\s*(\d+)\s+passed\b", re.I)  # the first count is the baseline's
 BASELINE_NOT_RUN = re.compile(r"not (?:yet )?run|\(expected|^expected|filled by the first run|^n/?a\b|^-?$", re.I)
 BASELINE_PASSED = re.compile(r"\bpass(?:ed|es)?\s+anyway|\bpassed\b(?! only)|\bpasses\b|\bredundant\b|"
                              r"\bbaseline (?:also )?(?:pass|did|wrote|built|found|named)", re.I)
@@ -553,6 +554,10 @@ def baseline_status(case: dict) -> str:
         return "not-run"
     if text.lower().startswith(("without the skill", "skill absent: expected")) and not re.search(r"\b20\d\d-\d\d-\d\d\b", text):
         return "not-run"  # a prediction of what a fresh session does, never dated: no run behind it
+    counts = [(int(a), int(b)) for a, b in BASELINE_COUNT.findall(text)]
+    if counts and "without" in text.lower():
+        # "without the skill 4 of 5 passed": a partial pass is a failure the skill can fix, not "already known"
+        return "passed" if counts[0][0] == counts[0][1] else "failed"
     passed, failed = bool(BASELINE_PASSED.search(text)), bool(BASELINE_FAILED.search(text))
     if passed and not failed:
         return "passed"
@@ -971,7 +976,9 @@ def render_lite(r: dict) -> str:
     issues = [f"mode {m['mode']} {m['name']}: {m['evidence']}" for m in r.get("modes") or []]
     issues += [f"gap: {g}" for g in r.get("gaps") or []] + [f"case {x}" for x in r.get("lint") or []]
     issues += [f"static: {w}" for w in r["warnings"]]
-    L += [f"  - {i}" for i in issues] or ["  no issues found on a quick scan; only --heavy (probe and A/B) shows the value"]
+    L += [f"  - {i}" for i in issues] or ["  no issues found on a quick scan" + (
+        "; the recorded verdict above is the last measurement" if rec and rec.get("delta") is not None
+        else "; only --heavy (probe and A/B) shows the value")]
     if r.get("lint"):
         L.append("  next: fix the case issues first (they cost nothing), then --heavy for the measured verdict")
     elif issues:
