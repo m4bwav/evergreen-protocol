@@ -662,7 +662,9 @@ class Scaffold(unittest.TestCase):
 
     def test_audit_shows_test_flags_and_counts_failing_units(self):
         d = Path(self.tmp.name) / "aud"
-        eg.main(["init", str(d), "--name", "aud", "--topic", "t", "--tier", "moderate", "--standalone", "--last-checked", "2026-09-01"])
+        # checked today, so the unit is never due when the suite runs (a fixed date made it due from 2026-10-01)
+        eg.main(["init", str(d), "--name", "aud", "--topic", "t", "--tier", "moderate", "--standalone",
+                 "--last-checked", datetime.now().date().isoformat()])
         out = capture(["audit", "--roots", str(Path(self.tmp.name))])
         self.assertIn("[untested]", out)
         self.assertNotIn("failing tests", out)
