@@ -4,7 +4,7 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
-### C-20261001-2 · 2026-10-01 · Version 0.13.1: a partial baseline pass ("without the skill 4 of 5 passed") reads as failed, not "already known"; lite names a recorded verdict as the last measurement
+### C-20261001-2 · 2026-10-01 · Version 0.13.1: a partial baseline pass ("without the skill 4 of 5 passed") reads as failed, not "already known"; lite names a recorded verdict as the last measurement and says when a skill is not loaded (parked)
 - because: L-029 (the first dated baselines written by `worth --ab`, on obsidian-notes, put a false mode 2 "already known" in every lite scan, because any "passed" counted as a full pass)
 - files: scripts/evergreen_worth.py (`BASELINE_COUNT`, `baseline_status`, `render_lite`), scripts/test_evergreen.py (`test_case_lint_finds_what_would_waste_an_ab`), .claude-plugin/plugin.json (0.13.1), LEARNINGS.md (L-029)
 - The first "N of M passed" in a note that speaks of the run without the skill decides: all passed is "passed", fewer is "failed".

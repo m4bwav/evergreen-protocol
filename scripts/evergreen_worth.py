@@ -965,7 +965,9 @@ def render_lite(r: dict) -> str:
     """The quick scan: cost, use, verdict and every issue on one screen, nothing that needs a model."""
     u = r.get("usage") or {}
     ev = r.get("evidence") or {}
-    L = [f"lite   {r['skill']}: {r['verdict']}  (listing ~{r['listing_tokens']:,} every session, body ~{r['body_tokens']:,} "
+    listing = (f"listing ~{r['listing_tokens']:,} every session" if r.get("installed")
+               else f"not loaded here, listing ~{r['listing_tokens']:,} when loaded")  # a parked skill costs no listing
+    L = [f"lite   {r['skill']}: {r['verdict']}  ({listing}, body ~{r['body_tokens']:,} "
          f"per use; {u.get('interactive', 0)} interactive + {u.get('subagent', 0)} subagent uses in {u.get('days', USAGE_DAYS)} "
          f"days; {len(ev.get('value_cases') or [])} value case(s))"]
     rec = recorded(Path(r["unit"]), r["skill"]) if r.get("unit") else None
