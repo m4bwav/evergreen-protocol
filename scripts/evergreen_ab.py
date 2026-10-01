@@ -480,9 +480,10 @@ def one_run(case: dict, arm: str, n: int, skill_dir: Path, name: str, evals_home
 
 def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | None = None, out: str | None = None,
            model: str | None = None, variables: dict[str, str] | None = None, blind: bool = False,
-           concurrency: int = 3, append: bool = False) -> Path | None:
+           concurrency: int = 3, append: bool = False, arms: tuple[str, ...] = ("with", "without")) -> Path | None:
     """Run the value cases; with `append`, add the runs to the aggregate-result.json already in `out` (a top-up
-    inside the noise margin) instead of replacing it."""
+    inside the noise margin) instead of replacing it. `arms=("with",)` re-runs only the skill's arm, for an edited skill
+    measured against the baseline already in `out` (the baseline does not change when only the skill does)."""
     import fnmatch
     if blind and not os.environ.get("ANTHROPIC_API_KEY"):
         print("[worth --ab] --blind needs ANTHROPIC_API_KEY (`claude --bare` skips OAuth); run without it, or set the key")
@@ -513,9 +514,9 @@ def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | N
         for c in old_agg.get("cases") or []:
             for arm, rs in (c.get("arms") or {}).items():
                 results[(c["name"], arm)] = list(rs)
-    jobs = [(c, arm, len(results.get((c["id"], arm), [])) + n) for c in cases for arm in ("with", "without")
+    jobs = [(c, arm, len(results.get((c["id"], arm), [])) + n) for c in cases for arm in arms
             for n in range(1, runs + 1)]
-    print(f"[worth --ab] {name}: {len(cases)} value case(s) x 2 arms x {runs} runs = {len(jobs)} headless runs -> {dest}")
+    print(f"[worth --ab] {name}: {len(cases)} value case(s) x {len(arms)} arm(s) x {runs} runs = {len(jobs)} headless runs -> {dest}")
     started = (old_agg or {}).get("startedAt") or datetime.now().isoformat(timespec="seconds")
     with cf.ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
         var = {**(variables or {}), "__home__": str(home)}

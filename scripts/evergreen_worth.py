@@ -885,7 +885,8 @@ def assess(target: Path, against: str | None = None, results: list[str] | None =
             v, why = manual["verdict"], f"{manual.get('why') or 'set by hand'} (set by hand {manual.get('checked')})"
         st.update({"ab": ab, "evidence": ev, "verdict": v, "why": why, "unit": str(unit) if unit else None})
         st["modes"] = failure_modes(st, ev, ab, manual)
-        st["gaps"] = evidence_gaps(ev, ab)
+        # a recorded A/B (worth --record) measured the baseline even when its result files are elsewhere
+        st["gaps"] = evidence_gaps(ev, ab or (manual if manual and manual.get("delta") is not None else None))
         u = st.get("usage") or {}
         st["triage"] = round((st["listing_tokens"] + st["body_tokens"]) / (u.get("interactive", 0) + u.get("subagent", 0) + 1))
         out.append(st)
@@ -962,6 +963,11 @@ def render_lite(r: dict) -> str:
     L = [f"lite   {r['skill']}: {r['verdict']}  (listing ~{r['listing_tokens']:,} every session, body ~{r['body_tokens']:,} "
          f"per use; {u.get('interactive', 0)} interactive + {u.get('subagent', 0)} subagent uses in {u.get('days', USAGE_DAYS)} "
          f"days; {len(ev.get('value_cases') or [])} value case(s))"]
+    rec = recorded(Path(r["unit"]), r["skill"]) if r.get("unit") else None
+    if rec and not r.get("ab"):  # the last measured verdict, so a quick scan does not read as never tested
+        L.append(f"  recorded {rec.get('verdict')} on {rec.get('ruled') or rec.get('checked')}"
+                 + (f": {rec['delta'] * 100:+.0f} points at {rec.get('cost_ratio')}x the cost" if rec.get("delta") is not None else "")
+                 + (f" ({rec.get('why')})" if rec.get("manual") else ""))
     issues = [f"mode {m['mode']} {m['name']}: {m['evidence']}" for m in r.get("modes") or []]
     issues += [f"gap: {g}" for g in r.get("gaps") or []] + [f"case {x}" for x in r.get("lint") or []]
     issues += [f"static: {w}" for w in r["warnings"]]
@@ -1145,7 +1151,7 @@ def cmd_worth(a):
             ab_out = str(Path(a.out) / "ab") if a.heavy else a.out
             out = eab.run_ab(files[0].parent, unit_for(files[0], target), runs=a.runs, case_glob=a.case, out=ab_out,
                              model=a.model, variables=variables, blind=a.blind, concurrency=a.concurrency,
-                             append=a.append)
+                             append=a.append, arms=tuple(a.arm) if a.arm else ("with", "without"))
             if out is None:
                 return
             a.results = [str(out)]
@@ -1243,7 +1249,7 @@ def _heavy_topup(a, skill_md: Path, target: Path, out: Path, variables: dict, ea
         eab.run_ab(skill_md.parent, unit, runs=more, case_glob=a.case, out=str(out), model=a.model,
                    variables=variables, blind=a.blind, concurrency=a.concurrency, append=True)
     spent, n = _spent(out)
-    print(f"[worth --heavy] {n} runs, ${spent + probe_cost:.2f} with the probe; results in {out}")
+    print(f"[worth --heavy] {n} runs, ${spent + probe_cost:.2f}" + (" with the probe" if probe_cost else "") + f"; results in {out}")
 
 
 def cmd_worth_hook(a):
@@ -1298,6 +1304,8 @@ def add_parsers(sp, common):
     s.add_argument("--no-probe", action="store_true", help="--heavy without the knowledge probe")
     s.add_argument("--force", action="store_true", help="--heavy even when the case lint finds problems")
     s.add_argument("--append", action="store_true", help="--ab adds its runs to the aggregate-result.json already in --out")
+    s.add_argument("--arm", action="append", choices=("with", "without"), help="--ab runs only this arm (with --append: "
+                   "re-measure an edited skill against the baseline already in --out)")
     s.add_argument("--triage", action="store_true", help="one row per skill, costliest per use first, with failure modes and evidence gaps")
     s.add_argument("--days", type=int, default=USAGE_DAYS, help=f"usage window in days (default {USAGE_DAYS})")
     s.add_argument("--probe", action="store_true", help="knowledge probe: ask a fresh headless session without the skill how it would do the job")

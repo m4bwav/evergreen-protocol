@@ -7,7 +7,7 @@ This repo is the evergreen plugin: self-maintaining, self-proving skills and kno
 - Self-test: `python scripts/test_evergreen.py`
 - Audit with checks: `python scripts/evergreen.py audit --checks`
 - Validate plugin structure (Claude Code): `claude plugin validate .claude-plugin/plugin.json`
-- Is a skill worth its tokens (static reading, plus the with/without A/B when `claude plugin eval` results exist): `python scripts/evergreen.py worth skills/` or `worth <skill> --against HEAD` for an edit; a catalog with `worth <dir> <dir> ... --triage`; `--probe` and `--ab` spend model runs (`evergreen_ab.py`), so run them only when asked
+- Is a skill worth its tokens (static reading, plus the with/without A/B when `claude plugin eval` results exist): `python scripts/evergreen.py worth skills/` or `worth <skill> --against HEAD` for an edit; a catalog with `worth <dir> <dir> ... --triage`; `--lite` is the free quick scan (adds the case lint); `--probe`, `--ab` and `--heavy` spend model runs (`evergreen_ab.py`), so run them only when asked
 - Benchmark the refresh schedule (synthetic units, the real rule imported): `python scripts/bench_intervals.py`
 - Skill evals (Claude Code 2.1.269+): `claude plugin eval . --trust-plugin --no-publish --case "trigger-*" --judge-model sonnet` (cases in `evals/cases/`; on native Windows only cases without Bash run)
 
