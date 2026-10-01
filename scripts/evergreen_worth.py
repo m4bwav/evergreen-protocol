@@ -11,10 +11,19 @@ Two kinds of evidence, cheapest first (protocol/TESTING.md section 8):
            for the action and outcome cases: pass rate with against without, and what the gain cost in dollars,
            turns and time. This is the proof, and when present it decides the verdict.
 
+  usage    Skill calls in Claude Code's own transcripts over 60 days, split into interactive sessions, subagents and
+           headless runs (`claude -p`, the SDK: evals and scripts), so test traffic never counts as use.
+  evidence what the unit's evals.json already knows: how many value cases the skill owns, which baselines passed,
+           failed or were never run, and which cases pass only on the skill's own script (a process grader).
+
 Verdicts: KEEP (a measured gain, or the same result for less), TRIM (a measured gain at a high price, or a lean
 test with a suspect body), CUT (no gain beyond noise at a higher cost, a loss, or a model that already passes
 without the skill), UNPROVEN (no A/B yet and nothing suspect), SUSPECT (no A/B yet and the static signals say
-mostly general advice, bloat or duplication; run the A/B before investing more).
+mostly general advice, bloat or duplication; run the A/B before investing more). FIX and SUPERSEDED are a person's
+rulings, recorded with `--set`: a fixable failure, or a better tool that now does the job.
+
+Failure modes (why a skill is useless; TESTING.md section 8): 1 never fires, 2 already known, 3 no gain, 4 worse,
+5 superseded. `modes` lists the ones the evidence points to, each with the evidence.
 
 Pure standard library; fails soft like the rest of evergreen.py.
 """
@@ -24,10 +33,11 @@ import fnmatch
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import evergreen as eg
@@ -50,6 +60,9 @@ AB_COST_CUT = 1.15              # no gain beyond noise and this much more cost: 
 AB_COST_TRIM = 1.50             # a real gain at this cost ratio or more: TRIM, then re-run
 AB_CHEAPER = 0.85               # the same result at this cost ratio or less counts as a gain
 AB_CEILING = 0.90               # the model passes the value cases this often without the skill
+USAGE_DAYS = 60                 # the window for "never fires": long enough for a skill used once a month to show up
+NEVER_FIRES_MIN_AGE_DAYS = 14   # a skill younger than this has not had its chance to be used
+MANUAL_VERDICTS = ("KEEP", "TRIM", "FIX", "CUT", "SUPERSEDED")
 
 GENERIC_MARKERS = re.compile(
     r"\b(best practices?|clean code|readab(?:le|ility)|maintainab(?:le|ility)|robust(?:ness)?|high[- ]quality|"
@@ -207,12 +220,57 @@ def tfidf_cosine(target: str, peers: dict[str, str]) -> list[tuple[float, str]]:
     return sorted(out, reverse=True)
 
 
+def claude_dir() -> Path:
+    """Claude Code's config folder: CLAUDE_CONFIG_DIR when set, else ~/.claude."""
+    env = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(env).expanduser() if env else Path.home() / ".claude"
+
+
+def _read_json(p: Path, default):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def enabled_plugins() -> dict[str, Path]:
+    """{name@marketplace: install path} for plugins that are installed and enabled in the user's settings. Every
+    cached version of every plugin, disabled ones included, sits under plugins/cache; only these reach the listing."""
+    reg = _read_json(claude_dir() / "plugins" / "installed_plugins.json", {}) or {}
+    reg = reg.get("plugins", reg) if isinstance(reg, dict) else {}
+    on = (_read_json(claude_dir() / "settings.json", {}) or {}).get("enabledPlugins") or {}
+    out = {}
+    for key, entries in reg.items():
+        if not on.get(key):
+            continue
+        for e in entries if isinstance(entries, list) else [entries]:
+            if isinstance(e, dict) and e.get("installPath"):
+                out[key] = Path(e["installPath"])
+    return out
+
+
+def installed_as(name: str) -> str | None:
+    """Where the agent here loads a skill of this name from: 'plugin <key>', 'user', 'project', or None."""
+    for key, root in enabled_plugins().items():
+        if (root / "skills" / name / "SKILL.md").exists():
+            return f"plugin {key}"
+    if (claude_dir() / "skills" / name / "SKILL.md").exists():
+        return "user"
+    if (Path.cwd() / ".claude" / "skills" / name / "SKILL.md").exists():
+        return "project"
+    return None
+
+
 def peer_skill_files(target: Path, extra: list[Path] | None = None) -> list[Path]:
-    """SKILL.md files the model would see beside the target: its siblings, the user's skill folders, installed plugins."""
+    """SKILL.md files the model would see beside the target: its siblings, the user's skill folders, enabled plugins."""
     home = Path.home()
-    pats = [(target.parent.parent, "*/SKILL.md"), (home / ".claude" / "skills", "*/SKILL.md"),
-            (Path.cwd() / ".claude" / "skills", "*/SKILL.md"), (Path.cwd() / ".agents" / "skills", "*/SKILL.md"),
-            (home / ".claude" / "plugins" / "cache", "*/*/*/skills/*/SKILL.md")]
+    pats = [(target.parent.parent, "*/SKILL.md"), (claude_dir() / "skills", "*/SKILL.md"),
+            (Path.cwd() / ".claude" / "skills", "*/SKILL.md"), (Path.cwd() / ".agents" / "skills", "*/SKILL.md")]
+    plugins = enabled_plugins()
+    if plugins:
+        pats += [(root, "skills/*/SKILL.md") for root in plugins.values()]
+    elif not (claude_dir() / "plugins" / "installed_plugins.json").exists():
+        pats.append((home / ".claude" / "plugins" / "cache", "*/*/*/skills/*/SKILL.md"))  # no registry: best guess
     for e in extra or []:
         pats.append((e, "*/SKILL.md"))
         pats.append((e, "skills/*/SKILL.md"))
@@ -227,6 +285,94 @@ def peer_skill_files(target: Path, extra: list[Path] | None = None) -> list[Path
         except Exception:
             continue
     return out
+
+
+CMD_RE = re.compile(r"<command-name>/?([A-Za-z0-9:_-]+)</command-name>")
+_USES: dict[int, dict[str, dict]] = {}
+
+
+def in_temp(cwd: str | None) -> bool:
+    """A session whose working folder is under the temp directory is a test or a script, not a person's work: eval
+    harnesses run `claude -p` in fresh temp folders, and a -p child started from an IDE session inherits the IDE's
+    entrypoint, so the entrypoint alone cannot tell (seen 2026-09-30: wikiwright suites logged as claude-vscode)."""
+    if not cwd:
+        return False
+    import tempfile
+    c = os.path.normcase(os.path.abspath(cwd))
+    roots = {tempfile.gettempdir(), os.environ.get("TEMP") or "", os.environ.get("TMP") or "", "/tmp", "/var/folders"}
+    return any(r and c.startswith(os.path.normcase(os.path.abspath(r))) for r in roots)
+
+
+def transcript_uses(days: int = USAGE_DAYS) -> dict[str, dict]:
+    """Skill invocations per skill (plugin prefix dropped) from Claude Code's transcripts, split by where they ran:
+    `interactive` (a person's session; typed slash commands count), `subagent` (a sidechain), `headless` (`claude -p`
+    or the SDK: evals and scripts, which are tests, not use). Also `sessions` (interactive) and `last` (ISO date).
+    The JSONL format is internal and unstable; unknown lines are skipped. Read once per process."""
+    if days in _USES:
+        return _USES[days]
+    out: dict[str, dict] = {}
+    root = claude_dir() / "projects"
+    cut = datetime.now().timestamp() - days * 86400
+    for f in root.glob("**/*.jsonl") if root.exists() else []:
+        try:
+            if f.stat().st_mtime < cut:
+                continue
+            fh = f.open(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        sub_file, entry, cwd, seen = "subagents" in f.parts, None, None, set()
+        with fh:
+            for line in fh:
+                if entry is None and '"entrypoint"' in line:
+                    m = re.search(r'"entrypoint"\s*:\s*"([^"]+)"', line)
+                    entry = m.group(1) if m else None
+                if cwd is None and '"cwd"' in line:
+                    m = re.search(r'"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"', line)
+                    cwd = json.loads(f'"{m.group(1)}"') if m else None
+                if '"Skill"' not in line and "command-name" not in line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except ValueError:
+                    continue
+                msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+                content, names = msg.get("content"), []
+                if o.get("type") == "user" and not o.get("isSidechain"):
+                    text = content if isinstance(content, str) else " ".join(
+                        c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text") \
+                        if isinstance(content, list) else ""
+                    names = [m.group(1) for m in CMD_RE.finditer(text or "")]
+                elif o.get("type") == "assistant" and isinstance(content, list):
+                    names = [str((c.get("input") or {}).get("skill")) for c in content if isinstance(c, dict)
+                             and c.get("type") == "tool_use" and c.get("name") == "Skill" and (c.get("input") or {}).get("skill")]
+                for nm in names:
+                    key = nm.strip().lstrip("/").split()[0].split(":")[-1] if nm.strip() else ""
+                    if not key:
+                        continue
+                    where = ("subagent" if sub_file or o.get("isSidechain") else
+                             "headless" if str(o.get("entrypoint") or entry or "").startswith("sdk")
+                             or in_temp(o.get("cwd") or cwd) else "interactive")
+                    r = out.setdefault(key, {"interactive": 0, "subagent": 0, "headless": 0, "sessions": 0, "last": None})
+                    r[where] += 1
+                    if where == "interactive" and key not in seen:
+                        seen.add(key)
+                        r["sessions"] += 1
+                    ts = str(o.get("timestamp") or "")[:10]
+                    if ts and (r["last"] is None or ts > r["last"]):
+                        r["last"] = ts
+    _USES[days] = out
+    return out
+
+
+def skill_age_days(skill_md: Path) -> int | None:
+    """Days since SKILL.md was first committed (None outside git): a young skill has not had its chance to be used."""
+    first = eg.git(["log", "--follow", "--diff-filter=A", "--format=%as", "--", skill_md.name], skill_md.parent)
+    if not first:
+        return None
+    try:
+        return (date.today() - date.fromisoformat(first.strip().splitlines()[-1])).days
+    except ValueError:
+        return None
 
 
 def repo_docs(skill_dir: Path) -> list[Path]:
@@ -358,9 +504,14 @@ def static_report(skill_md: Path, against: str | None = None, peers: bool = True
             elif added >= UPDATE_TOKENS_MIN and growth >= UPDATE_GROWTH_WARN:
                 w.append(f"this edit grows the body by {int(100 * growth)}% (about {added:,} tokens); prove the extra "
                          f"text earns its cost with the A/B")
-    r["uses_30d"] = None
-    if uses and eg.uses_path().exists():
-        r["uses_30d"] = len(eg.read_uses(name, days=30))
+    r["uses_30d"], r["usage"], r["installed"], r["age_days"] = None, None, None, None
+    if uses:
+        if eg.uses_path().exists():
+            r["uses_30d"] = len(eg.read_uses(name, days=30))
+        r["usage"] = {"days": USAGE_DAYS, **transcript_uses(USAGE_DAYS).get(
+            name, {"interactive": 0, "subagent": 0, "headless": 0, "sessions": 0, "last": None})}
+        r["installed"] = installed_as(name)
+        r["age_days"] = skill_age_days(skill_md)
     score = len(w)
     heavy = any(s.startswith(("mostly general", "this edit adds")) for s in w)
     r["static"] = "SUSPECT" if score >= 2 or heavy else ("CHECK" if score == 1 else "LEAN")
@@ -378,6 +529,140 @@ def case_kinds(unit: Path) -> dict[str, dict]:
                 if isinstance(c, dict) and c.get("id")}
     except Exception:
         return {}
+
+
+BASELINE_NOT_RUN = re.compile(r"not (?:yet )?run|\(expected|^expected|filled by the first run|^n/?a\b|^-?$", re.I)
+BASELINE_PASSED = re.compile(r"\bpass(?:ed|es)?\s+anyway|\bpassed\b(?! only)|\bpasses\b|\bredundant\b|"
+                             r"\bbaseline (?:also )?(?:pass|did|wrote|built|found|named)", re.I)
+BASELINE_FAILED = re.compile(r"\bfail(?:s|ed)?\b(?! only)|\bFAIL\b|\b0/\d|never (?:ran|run|wrote|created|opened)|"
+                             r"did not|didn't|no (?:file|notes|beat files|log line|saved answer)|"
+                             r"writes? (?:a|the) [\w ]{0,30}in (?:chat|the reply)", re.I)
+SCRIPT_RE = re.compile(r"([\w-]+)\\?\.(py|mjs|cjs|js|sh|ps1)\b")
+
+
+def baseline_status(case: dict) -> str:
+    """'passed', 'failed', 'not-run' or 'described' from a case's `redundant` flag and free-text `baseline` note.
+    A note that predicts the baseline ('expected, not yet run', 'filled by the first run') is not a run."""
+    if case.get("redundant"):
+        return "passed"
+    text = str(case.get("baseline") or "").strip()
+    if not text or BASELINE_NOT_RUN.search(text[:60]):
+        return "not-run"
+    if text.lower().startswith(("without the skill", "skill absent: expected")) and not re.search(r"\b20\d\d-\d\d-\d\d\b", text):
+        return "not-run"  # a prediction of what a fresh session does, never dated: no run behind it
+    passed, failed = bool(BASELINE_PASSED.search(text)), bool(BASELINE_FAILED.search(text))
+    if passed and not failed:
+        return "passed"
+    if failed and not passed:
+        return "failed"
+    return "described"
+
+
+def _evidence_leaves(ev) -> list[dict]:
+    if not isinstance(ev, dict):
+        return []
+    out = [ev] if ev.get("type") else []
+    for k in ("or", "and"):
+        out += _evidence_leaves(ev.get(k))
+    for k in ("all", "any"):
+        for x in ev.get(k) or []:
+            out += _evidence_leaves(x)
+    for s in ev.get("steps") or []:
+        out.append({"type": "trace", **s})
+    return out
+
+
+def _unit_scripts(unit: Path) -> set[str]:
+    names = set()
+    for p in unit.rglob("*"):
+        if p.suffix in (".py", ".mjs", ".cjs", ".js", ".sh", ".ps1") and not any(
+                part in (".git", "node_modules", "fixtures", "results") for part in p.parts):
+            names.add(p.stem.lower())
+    return names
+
+
+def process_only(case: dict, scripts: set[str]) -> bool:
+    """True when every way the case can pass is a call to one of the unit's own scripts (or the Skill tool): the
+    baseline cannot pass it whatever result it produces, so a with-arm gain proves the route, not a better result."""
+    leaves = [x for x in _evidence_leaves(case.get("evidence")) if x.get("type") not in ("sequence",)]
+    if not leaves:
+        return False
+    for leaf in leaves:
+        if leaf.get("type") != "trace":
+            return False
+        if str(leaf.get("tool") or "") == "Skill":
+            continue
+        pat = str(leaf.get("input_match") or "") + " " + str(leaf.get("must_contain") or "")
+        if not any(m.group(1).lower() in scripts for m in SCRIPT_RE.finditer(pat)):
+            return False
+    return True
+
+
+def evidence_report(unit: Path, skill: str | None = None) -> dict:
+    """What the unit's evals.json says about the value of `skill` (None: every case): value cases it owns, the status
+    of each case's recorded baseline, and the cases graded only on the unit's own scripts."""
+    kinds = case_kinds(unit)
+    scripts = _unit_scripts(unit) if kinds else set()
+    rep = {"value_cases": [], "baseline": {"passed": [], "failed": [], "not-run": [], "described": []},
+           "process_only": [], "trigger_cases": 0}
+    for cid, c in kinds.items():
+        if skill and c.get("_skill", "").split(":")[-1] != skill:
+            continue
+        if c.get("kind") == "trigger" and not c.get("decoy") and not cid.startswith("decoy"):
+            rep["trigger_cases"] += 1
+        if c.get("kind") not in VALUE_KINDS or c.get("decoy"):
+            continue
+        rep["value_cases"].append(cid)
+        rep["baseline"][baseline_status(c)].append(cid)
+        if process_only(c, scripts):
+            rep["process_only"].append(cid)
+    return rep
+
+
+def failure_modes(st: dict, ev: dict | None, ab: dict | None, manual: dict | None = None) -> list[dict]:
+    """The useless-skill failure modes the evidence points to (TESTING.md section 8), each with its evidence."""
+    modes = []
+    u, inst, age = st.get("usage"), st.get("installed"), st.get("age_days")
+    if u is not None and inst and u["interactive"] + u["subagent"] == 0 and (age is None or age >= NEVER_FIRES_MIN_AGE_DAYS):
+        modes.append({"mode": 1, "name": "never fires",
+                      "evidence": f"installed ({inst}) and no Skill call in {u['days']} days of transcripts"
+                                  + (f" ({u['headless']} headless test runs only)" if u["headless"] else "")})
+    if ev and ev["value_cases"]:
+        known = [c for c in ev["value_cases"] if c not in ev["baseline"]["not-run"] + ev["baseline"]["described"]]
+        if known and set(known) <= set(ev["baseline"]["passed"]):
+            modes.append({"mode": 2, "name": "already known",
+                          "evidence": f"every value case with a recorded baseline passed without the skill: {', '.join(known)}"})
+    if st.get("probe") and st["probe"].get("coverage") is not None and st["probe"]["coverage"] >= 0.8:
+        modes.append({"mode": 2, "name": "already known",
+                      "evidence": f"the knowledge probe covered {int(100 * st['probe']['coverage'])}% of the key anchors"})
+    if ab:
+        if ab["delta"] <= -ab["margin"]:
+            modes.append({"mode": 4, "name": "worse", "evidence": f"pass rate {ab['delta'] * 100:+.0f} points with the skill"})
+        elif ab["delta"] < ab["margin"]:
+            cr = ab.get("cost_ratio") or 1.0
+            if cr >= AB_COST_CUT:
+                modes.append({"mode": 4, "name": "worse", "evidence": f"same result at {cr}x the cost"})
+            else:
+                modes.append({"mode": 3, "name": "no gain", "evidence": f"{ab['delta'] * 100:+.0f} points, inside the "
+                                                                       f"{ab['margin'] * 100:.0f}-point noise margin"})
+    if manual and manual.get("verdict") == "SUPERSEDED":
+        modes.append({"mode": 5, "name": "superseded", "evidence": manual.get("replaced_by") or manual.get("why") or ""})
+    return modes
+
+
+def evidence_gaps(ev: dict | None, ab: dict | None) -> list[str]:
+    """Why the worth of a skill is not measured yet: the things to write or run before any verdict is earned."""
+    if ev is None:
+        return ["no evals/evals.json: write value cases first (evergreen-test Step 2)"]
+    gaps = []
+    if not ev["value_cases"]:
+        gaps.append("no value case (action or outcome): the A/B has nothing to measure")
+    elif not ab and not [c for c in ev["value_cases"] if c in ev["baseline"]["passed"] + ev["baseline"]["failed"]]:
+        gaps.append("no baseline was ever run for its value cases: `worth --ab` runs both arms")
+    if ev["value_cases"] and set(ev["value_cases"]) <= set(ev["process_only"]):
+        gaps.append("every value case passes only on the skill's own script: a gain proves the route, not a better "
+                    "result; add a case graded on the result")
+    return gaps
 
 
 def result_files(unit: Path, results: list[str] | None) -> list[Path]:
@@ -491,20 +776,45 @@ def unit_for(skill_md: Path, target: Path) -> Path | None:
     return None
 
 
+def recorded(unit: Path | None, skill: str) -> dict | None:
+    """The skill's entry in its unit's evergreen.json `worth` block, if any."""
+    if unit is None:
+        return None
+    st = _read_json(unit / "evergreen.json", {}) or {}
+    block = st.get("worth") if isinstance(st.get("worth"), dict) else {}
+    v = (block.get("skills") or {}).get(skill)
+    return v if isinstance(v, dict) else None
+
+
 def assess(target: Path, against: str | None = None, results: list[str] | None = None, peers: bool = True,
-           case_glob: str | None = None) -> list[dict]:
+           case_glob: str | None = None, uses: bool = True) -> list[dict]:
     out = []
     files = find_skill_files(target)
     for f in files:
-        st = static_report(f, against=against, peers=peers)
+        st = static_report(f, against=against, peers=peers, uses=uses)
         unit = unit_for(f, target)
-        ab = None
+        ab, ev = None, None
+        # a skill that is its own unit owns every case; a skill inside a plugin owns only the cases that name it
+        own = unit is not None and unit.resolve() == f.parent.resolve()
         if unit is not None or results:
-            # a skill that is its own unit owns every case; a skill inside a plugin owns only the cases that name it
-            own = unit is not None and unit.resolve() == f.parent.resolve()
             ab = ab_report(unit or f.parent, results, skill=None if own else st["skill"], case_glob=case_glob)
+        evals_home = unit if unit is not None and (unit / "evals" / "evals.json").exists() else (
+            f.parent if (f.parent / "evals" / "evals.json").exists() else None)
+        if evals_home is not None:
+            ev = evidence_report(evals_home, skill=None if evals_home.resolve() == f.parent.resolve() else st["skill"])
         v, why = verdict(st, ab)
-        st.update({"ab": ab, "verdict": v, "why": why, "unit": str(unit) if unit else None})
+        if ab and ev and ev["process_only"] and ab["delta"] >= ab["margin"]:
+            gain = [c["case"] for c in ab["cases"] if c["delta"] > 0]
+            if gain and set(gain) <= set(ev["process_only"]):
+                why += "; the gain is only on cases graded by the skill's own script, so check the result is better too"
+        manual = recorded(unit, st["skill"])
+        if manual and manual.get("manual"):
+            v, why = manual["verdict"], f"{manual.get('why') or 'set by hand'} (set by hand {manual.get('checked')})"
+        st.update({"ab": ab, "evidence": ev, "verdict": v, "why": why, "unit": str(unit) if unit else None})
+        st["modes"] = failure_modes(st, ev, ab, manual)
+        st["gaps"] = evidence_gaps(ev, ab)
+        u = st.get("usage") or {}
+        st["triage"] = round((st["listing_tokens"] + st["body_tokens"]) / (u.get("interactive", 0) + u.get("subagent", 0) + 1))
         out.append(st)
     return out
 
@@ -536,8 +846,19 @@ def render(r: dict) -> str:
         c = r["change"]
         L.append(f"  change   vs {c['against']}: {c['added_tokens']:+,} tokens, {c['new_specific']} of {c['new_sentences']} "
                  f"new sentences specific")
-    if r.get("uses_30d") is not None:
-        L.append(f"  uses     {r['uses_30d']} in 30 days (use log)")
+    u = r.get("usage")
+    if u is not None:
+        L.append(f"  uses     {u['interactive']} interactive ({u['sessions']} sessions), {u['subagent']} subagent, "
+                 f"{u['headless']} headless in {u['days']} days (transcripts)"
+                 + (f" · last {u['last']}" if u.get("last") else "")
+                 + f" · {'loaded as ' + r['installed'] if r.get('installed') else 'not installed here'}"
+                 + (f" · {r['uses_30d']} in 30 days (use log)" if r.get("uses_30d") is not None else ""))
+    ev = r.get("evidence")
+    if ev is not None:
+        b = ev["baseline"]
+        L.append(f"  evidence {len(ev['value_cases'])} value case(s): baseline passed {len(b['passed'])}, failed "
+                 f"{len(b['failed'])}, never run {len(b['not-run'])}, unclear {len(b['described'])} · "
+                 f"{len(ev['process_only'])} graded only on the skill's own script")
     ab = r.get("ab")
     if ab:
         L.append(f"  A/B      {len(ab['cases'])} value case(s), {ab['runs_with']}/{ab['runs_without']} runs: pass "
@@ -545,9 +866,45 @@ def render(r: dict) -> str:
                  f"turns x{ab['turns_ratio']} · time x{ab['time_ratio']}")
     else:
         L.append("  A/B      none yet (claude plugin eval, with-without, on the action and outcome cases)")
+    if r.get("probe"):
+        p = r["probe"]
+        L.append(f"  probe    without the skill the answer named {p['covered']} of {p['anchors']} key anchors "
+                 f"({int(100 * (p['coverage'] or 0))}%); answer in {p['out']}")
     L.append(f"  verdict  {r['verdict']}  {r['why']}")
+    for m in r.get("modes") or []:
+        L.append(f"  mode {m['mode']}   {m['name']}: {m['evidence']}")
+    for g in r.get("gaps") or []:
+        L.append(f"  gap      {g}")
     for w in r["warnings"]:
         L.append(f"    - {w}")
+    return "\n".join(L)
+
+
+def render_triage(results: list[dict]) -> str:
+    """One row per skill, costliest per use first: (listing + body tokens) / (interactive + subagent uses + 1)."""
+    rows = sorted(results, key=lambda r: -r.get("triage", 0))
+    L = [f"{'triage':>7} {'skill':28} {'loaded':8} {'uses i/s/h':>11} {'listing':>7} {'body':>6} {'spec':>5} "
+         f"{'value':>5} {'base P/F/N':>10}  {'verdict':10} modes / gaps"]
+    for r in rows:
+        u = r.get("usage") or {}
+        ev = r.get("evidence")
+        b = ev["baseline"] if ev else None
+        sp = f"{int(100 * r['specific_share'])}%" if r["specific_share"] is not None else "-"
+        flags = [f"{m['mode']}:{m['name']}" for m in r.get("modes") or []]
+        flags += ["no value case" if "no value case" in g else "never baselined" if "baseline" in g else
+                  "process-only" if "route" in g else "no evals" for g in r.get("gaps") or []]
+        flags += ["static " + r["static"]] if r["static"] != "LEAN" else []
+        bs = "%d/%d/%d" % (len(b["passed"]), len(b["failed"]), len(b["not-run"]) + len(b["described"])) if b else "-"
+        L.append(f"{r.get('triage', 0):>7,} {r['skill'][:28]:28} {('yes' if r.get('installed') else 'no'):8} "
+                 f"{u.get('interactive', 0):>3}/{u.get('subagent', 0)}/{u.get('headless', 0):<3} "
+                 f"{r['listing_tokens']:>7,} {r['body_tokens']:>6,} {sp:>5} "
+                 f"{(len(ev['value_cases']) if ev else 0):>5} "
+                 f"{bs:>10}  "
+                 f"{r['verdict']:10} {'; '.join(flags)}")
+    tl = sum(r["listing_tokens"] for r in results if r.get("installed"))
+    L.append(f"-- {len(results)} skills; listing ~{tl:,} tokens in every session for the {sum(1 for r in results if r.get('installed'))} "
+             f"loaded here; uses are Skill calls in transcripts (i interactive, s subagent, h headless tests); "
+             f"base P/F/N = value-case baselines passed / failed / not run or unclear")
     return "\n".join(L)
 
 
@@ -564,23 +921,52 @@ def record(results: list[dict]) -> list[str]:
         skills = block.get("skills") if isinstance(block.get("skills"), dict) else {}
         for r in rs:
             ab = r.get("ab") or {}
-            skills[r["skill"]] = {"verdict": r["verdict"], "why": r["why"], "body_tokens": r["body_tokens"],
-                                  "listing_tokens": r["listing_tokens"], "specific_share": r["specific_share"],
-                                  "delta": ab.get("delta"), "cost_ratio": ab.get("cost_ratio"),
-                                  "checked": date.today().isoformat()}
+            old = skills.get(r["skill"]) if isinstance(skills.get(r["skill"]), dict) else {}
+            entry = {"verdict": r["verdict"], "why": r["why"], "body_tokens": r["body_tokens"],
+                     "listing_tokens": r["listing_tokens"], "specific_share": r["specific_share"],
+                     "delta": ab.get("delta"), "cost_ratio": ab.get("cost_ratio"),
+                     "modes": [m["mode"] for m in r.get("modes") or []], "gaps": len(r.get("gaps") or []),
+                     "checked": date.today().isoformat()}
+            if r.get("usage"):
+                entry["uses"] = {k: r["usage"][k] for k in ("days", "interactive", "subagent", "headless")}
+            if r.get("probe"):
+                entry["probe_coverage"] = r["probe"].get("coverage")
+            if old.get("manual"):  # a person's ruling stands until they change it; the measurements still refresh
+                entry.update({k: old[k] for k in ("verdict", "why", "manual", "replaced_by", "ruled") if k in old})
+            skills[r["skill"]] = entry
         st["worth"] = {"checked": date.today().isoformat(), "skills": skills}
         eg.save_state(d, st)
         written.append(str(d))
     return written
 
 
+def set_manual(unit: Path, skill: str, verdict_: str, why: str, replaced_by: str | None = None) -> None:
+    """Record a person's ruling (KEEP, TRIM, FIX, CUT, SUPERSEDED) in the unit's worth block; later `--record` runs keep it."""
+    d, st = eg.load_state(unit)
+    block = st.get("worth") if isinstance(st.get("worth"), dict) else {}
+    skills = block.get("skills") if isinstance(block.get("skills"), dict) else {}
+    entry = skills.get(skill) if isinstance(skills.get(skill), dict) else {}
+    entry.update({"verdict": verdict_, "why": why, "manual": True, "ruled": date.today().isoformat(),
+                  "checked": entry.get("checked") or date.today().isoformat()})
+    if replaced_by:
+        entry["replaced_by"] = replaced_by
+    skills[skill] = entry
+    st["worth"] = {"checked": block.get("checked") or date.today().isoformat(), "skills": skills}
+    eg.save_state(d, st)
+
+
 def worth_flags(st: dict) -> list[str]:
-    """Audit flags from a recorded worth block: only verdicts that ask for a decision."""
+    """Audit flags from a recorded worth block: only verdicts and failure modes that ask for a decision."""
     skills = ((st.get("worth") or {}).get("skills") or {}) if isinstance(st.get("worth"), dict) else {}
     out = []
     for name, v in sorted(skills.items()):
-        if isinstance(v, dict) and v.get("verdict") in ("CUT", "TRIM", "SUSPECT"):
-            out.append(f"worth:{v['verdict']}" + (f":{name}" if len(skills) > 1 else ""))
+        if not isinstance(v, dict):
+            continue
+        tag = f":{name}" if len(skills) > 1 else ""
+        if v.get("verdict") in ("CUT", "TRIM", "SUSPECT", "FIX", "SUPERSEDED"):
+            out.append(f"worth:{v['verdict']}{tag}")
+        elif 1 in (v.get("modes") or []):
+            out.append(f"worth:UNUSED{tag}")
     return out
 
 
@@ -607,10 +993,55 @@ def wrap(skill_dir: Path, out: Path) -> tuple[Path, list[str]]:
 
 
 def cmd_worth(a):
-    target = Path(a.target).expanduser()
-    if not target.exists():
-        print(f"[worth] no such path: {target}")
+    targets = [Path(t).expanduser() for t in a.target]
+    missing = [t for t in targets if not t.exists()]
+    if missing:
+        print(f"[worth] no such path: {', '.join(map(str, missing))}")
         return
+    global USAGE_DAYS
+    USAGE_DAYS = a.days
+    if len(targets) > 1 or a.triage:
+        results = []
+        for t in targets:
+            results += assess(t, against=a.against, results=None, peers=not a.no_peers, case_glob=a.case)
+        if not results:
+            print("[worth] no SKILL.md under the given paths")
+            return
+        print(json.dumps(results, indent=2) if a.json else render_triage(results))
+        if a.record:
+            for u in record(results):
+                print(f"[worth] recorded in {u}/evergreen.json")
+        return
+    target = targets[0]
+    if a.set:
+        files = find_skill_files(target)
+        unit = unit_for(files[0], target) if len(files) == 1 else None
+        if unit is None:
+            print("[worth] --set takes one skill whose unit has an evergreen.json")
+            return
+        fm, _ = parse_frontmatter(files[0].read_text(encoding="utf-8", errors="replace"))
+        name = fm.get("name") or files[0].parent.name
+        set_manual(unit, name, a.set, a.why or "", a.replaced_by)
+        print(f"[worth] {name}: {a.set} set by hand in {unit / 'evergreen.json'}")
+        return
+    probe_rep = None
+    if a.ab or a.probe:
+        import evergreen_ab as eab
+        files = find_skill_files(target)
+        if len(files) != 1:
+            print("[worth] --ab and --probe take one skill folder")
+            return
+        if a.probe:
+            probe_rep = eab.probe(files[0].parent, unit_for(files[0], target), prompt=a.prompt, out=a.out,
+                                  model=a.model, blind=a.blind)
+            print(eab.render_probe(probe_rep) + "\n")
+        if a.ab:
+            out = eab.run_ab(files[0].parent, unit_for(files[0], target), runs=a.runs, case_glob=a.case, out=a.out,
+                             model=a.model, variables=dict(v.split("=", 1) for v in a.var or [] if "=" in v),
+                             blind=a.blind, concurrency=a.concurrency)
+            if out is None:
+                return
+            a.results = [str(out)]
     if a.wrap:
         files = find_skill_files(target)
         if len(files) != 1:
@@ -627,6 +1058,11 @@ def cmd_worth(a):
     if not results:
         print(f"[worth] no SKILL.md at {target} (nor under skills/*/ or */)")
         return
+    if probe_rep and len(results) == 1:
+        r0 = results[0]
+        r0["probe"] = {k: probe_rep[k] for k in ("task", "anchors", "covered", "coverage", "out", "date")}
+        r0["modes"] = failure_modes(r0, r0.get("evidence"), r0.get("ab"),
+                                    recorded(Path(r0["unit"]) if r0.get("unit") else None, r0["skill"]))
     if a.json:
         print(json.dumps(results, indent=2))
     elif len(results) > 1 and not a.verbose:
@@ -697,7 +1133,22 @@ def cmd_worth_hook(a):
 
 def add_parsers(sp, common):
     s = sp.add_parser("worth", parents=[common], help="is a skill worth its tokens? static signals plus the with-versus-without A/B")
-    s.add_argument("target", help="a SKILL.md, a skill folder, a plugin root, or a folder of skill folders")
+    s.add_argument("target", nargs="+", help="a SKILL.md, a skill folder, a plugin root, or a folder of skill folders; "
+                                             "several targets print the triage table")
+    s.add_argument("--triage", action="store_true", help="one row per skill, costliest per use first, with failure modes and evidence gaps")
+    s.add_argument("--days", type=int, default=USAGE_DAYS, help=f"usage window in days (default {USAGE_DAYS})")
+    s.add_argument("--probe", action="store_true", help="knowledge probe: ask a fresh headless session without the skill how it would do the job")
+    s.add_argument("--prompt", help="the task for --probe (default: the skill's first value case, else its first trigger prompt)")
+    s.add_argument("--ab", action="store_true", help="run the value cases headless with and without the skill (claude -p; works on native Windows)")
+    s.add_argument("--runs", type=int, default=3, help="runs per arm for --ab (default 3; use 5 inside the noise margin)")
+    s.add_argument("--out", metavar="DIR", help="where --ab and --probe write transcripts and aggregate-result.json")
+    s.add_argument("--model", help="model for --ab and --probe runs")
+    s.add_argument("--var", action="append", metavar="NAME=VALUE", help="value for an evidence placeholder such as <vault> (repeatable)")
+    s.add_argument("--blind", action="store_true", help="--bare runs: no user CLAUDE.md in either arm (needs ANTHROPIC_API_KEY)")
+    s.add_argument("--concurrency", type=int, default=3, help="parallel runs for --ab (default 3)")
+    s.add_argument("--set", choices=MANUAL_VERDICTS, help="record a person's ruling for one skill (with --why, and --replaced-by for SUPERSEDED)")
+    s.add_argument("--why", help="the reason for --set")
+    s.add_argument("--replaced-by", help="what does the job now, with a dated source, for --set SUPERSEDED")
     s.add_argument("--against", metavar="REV", help="judge the edit since this git revision (e.g. HEAD, HEAD~1, master)")
     s.add_argument("--results", nargs="*", metavar="PATH", help="aggregate-result.json files or folders (default: <unit>/evals/results)")
     s.add_argument("--case", metavar="GLOB", help="only these value cases, e.g. 'action-*'")

@@ -6,6 +6,38 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-029 · 2026-09-30 · A baseline note in evals.json is usually a prediction, not a run (`baseline-note-is-not-a-run`)
+- Trigger: the skill worth study of 2026-09-30 read the value cases of 47 skills in 13 repositories; most `baseline` fields said "expected, not yet run", "filled by the first run" or an undated "without the skill a fresh session ...", and only package-modernize, wikiwright, everwrite, everlast, readwright and a few unity-agent and threewright cases had a dated run behind them. Many of the gains that were measured rested on a grader that requires the skill's own script (`cw.py`, `rw.py`, `tells.py`, `everlast.py`), which a baseline cannot pass whatever it produces
+- Hypothesis: writing the expected baseline is cheap and feels like evidence, so it stands in for the run; and a process grader proves the route, not a better result
+- Rule: count a baseline only when it is dated and says what the run did; treat undated predictions as never run; report value cases graded only on the unit's own scripts separately, and add at least one case graded on the result before calling a gain real
+- Evidence: Ai/skill-worth-study/raw/prior-ab-evidence.md (owner's study folder); `evergreen_worth.baseline_status`, `process_only` and `evidence_gaps` with tests in `WorthUseful`
+- Scope: plugin (TESTING.md §8; evergreen-worth, evergreen-test)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-30
+
+### L-028 · 2026-09-30 · The plugin cache holds disabled plugins and old versions; overlap peers must come from enabled installs (`peers-from-enabled-plugins`)
+- Trigger: `worth` warned that everscout-engage's description was close to `scout-ask`, a skill of a plugin that was installed but disabled; the peer glob read every folder under `plugins/cache`, every cached version included
+- Hypothesis: the cache is a download store, not the listing; only `installed_plugins.json` entries enabled in `settings.json` reach the model
+- Rule: build the peer set from enabled installs (`enabled_plugins()`), and fall back to the cache only when there is no registry
+- Evidence: the false CHECK disappeared from the 47-skill triage after the change; test `test_peers_come_from_enabled_plugins_only`
+- Scope: plugin (`evergreen_worth.peer_skill_files`)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-30
+
+### L-027 · 2026-09-30 · `--setting-sources project` drops user skills, plugins and auto memory but still loads the user's CLAUDE.md; `--bare` needs an API key (`headless-arms-share-user-claude-md`)
+- Trigger: a three-line probe from an empty temp folder (Claude Code 2.1.281, haiku): with `--setting-sources project` the skill listing held only built-ins and the model saw the user's global CLAUDE.md rule; with `--disable-slash-commands` the listing was empty; `--bare` answered "Not logged in" on an OAuth login
+- Hypothesis: setting sources govern settings files, not CLAUDE.md discovery; `--bare` skips discovery but also OAuth
+- Rule: run both A/B arms with `--setting-sources project` and record that the user's CLAUDE.md loads in both (fair, not blind); offer `--blind` (`--bare`) only when ANTHROPIC_API_KEY is set; never copy credentials into a temp config folder to get isolation
+- Evidence: the probe outputs in this session; `evergreen_ab.isolation_args` and the `isolation` field of aggregate-result.json
+- Scope: plugin (TESTING.md §6, §8; `scripts/evergreen_ab.py`)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-30
+
+### L-026 · 2026-09-30 · A `claude -p` child started from an IDE session logs the IDE's entrypoint; the temp working folder is what marks a test run (`headless-runs-log-ide-entrypoint`)
+- Trigger: transcript usage counted 69 interactive wikiwright invocations; 61 were eval suites run with `claude -p` in `%TEMP%\ww9-suite-*` folders, every one logged with `entrypoint: claude-vscode` because the child inherits it from the VS Code session that started the suite
+- Hypothesis: the entrypoint names the launcher's environment, not how the session is driven
+- Rule: classify a session as headless when its entrypoint starts with `sdk` or its working folder is under the temp directory; harnesses should also pass `--no-session-persistence` so their runs leave no transcript to count
+- Evidence: Ai/skill-worth-study/raw/usage-split-60d.json against the entrypoint-only count; test `test_transcript_uses_split_interactive_subagent_and_headless`
+- Scope: plugin (`evergreen_worth.transcript_uses`)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-09-30
+
 ### L-025 · 2026-09-29 · Headless eval runs share the session's filesystem and write to the unit's source; end every suite with `git status` (`suite-ends-with-git-status`)
 - Trigger: wikiwright's action suites ran through `claude -p` outside `claude plugin eval`'s throwaway workspace. In wikiwright:T-20260928-3 two skill-arm runs followed "capture learnings" and edited the source LEARNINGS.md, and one answered "does the wiki exist" with `git fetch` in a clone the launching session had made minutes before; in wikiwright:T-20260929-1 runs wrote a new learning, updates to three more and a line in a reference file, and left an untracked `package.json` (from `npm init -y`) in the skill's folder, which `git diff` does not show (2026-09-28, 2026-09-29)
 - Hypothesis: a fresh context is not a fresh filesystem; a headless run or subagent has the same files, overlay and plugin paths as the session that starts it, so the unit's source and anything the session made before the suite are part of every case

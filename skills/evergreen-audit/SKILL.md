@@ -39,6 +39,7 @@ If the user mentions a unit the audit did not list, `EG register <unit-dir>`. If
 - Installed copies: list which need a reinstall or republish because their source changed. "Source not visible from here" means the running copy may itself be the source seen through a mount; say so and continue.
 - Unsent update bundles (`EG where` lists them): the plugin changed itself here and the email did not go out; run `evergreen-notify`.
 - The use log (`EG where` shows it; `EG uses` lists recent skill invocations, Claude Code only): a skill invoked often is worth a suite; a skill never invoked in weeks may be undertriggering or unneeded, say so once.
+- Worth (`worth:CUT`, `TRIM`, `SUSPECT`, `FIX`, `SUPERSEDED`, `UNUSED` in the flags): name each once and hand the decision to `evergreen-worth`; `EG worth <folders> --triage` ranks a whole catalog by cost per use, with usage from the transcripts (tests excluded).
 
 ## Step 4: report
 
