@@ -662,7 +662,9 @@ class Scaffold(unittest.TestCase):
 
     def test_audit_shows_test_flags_and_counts_failing_units(self):
         d = Path(self.tmp.name) / "aud"
-        eg.main(["init", str(d), "--name", "aud", "--topic", "t", "--tier", "moderate", "--standalone", "--last-checked", "2026-09-01"])
+        # checked today, so the unit is never due when the suite runs (a fixed date made it due from 2026-10-01)
+        eg.main(["init", str(d), "--name", "aud", "--topic", "t", "--tier", "moderate", "--standalone",
+                 "--last-checked", datetime.now().date().isoformat()])
         out = capture(["audit", "--roots", str(Path(self.tmp.name))])
         self.assertIn("[untested]", out)
         self.assertNotIn("failing tests", out)
@@ -1551,6 +1553,171 @@ class Worth(unittest.TestCase):
         self.assertEqual(hook(p), "")
         self.assertNotEqual(hook(dict(p, session_id="s2")), "")
         self.assertEqual(hook({"tool_input": {"file_path": str(self.t / "x.py")}}), "")
+
+
+import evergreen_ab as eab  # noqa: E402
+
+
+class WorthUseful(unittest.TestCase):
+    """Detecting a useless skill: transcript usage, enabled plugins, recorded baselines, process graders, failure
+    modes, rulings, triage, and the headless A/B grader (TESTING.md section 8)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.t = Path(self.tmp.name)
+        self.env = {k: os.environ.get(k) for k in ("EVERGREEN_HOME", "CLAUDE_CONFIG_DIR")}
+        os.environ["EVERGREEN_HOME"] = str(self.t / "home")
+        os.environ["CLAUDE_CONFIG_DIR"] = str(self.t / "claude")
+        ew._USES.clear()
+
+    def tearDown(self):
+        for k, v in self.env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        ew._USES.clear()
+        self.tmp.cleanup()
+
+    def transcript(self, name, lines, sub=False):
+        d = self.t / "claude" / "projects" / "slug" / ("s1/subagents" if sub else "")
+        d.mkdir(parents=True, exist_ok=True)
+        (d / name).write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def skill_call(skill, **extra):
+        return {"type": "assistant", "timestamp": "2026-09-29T10:00:00Z", **extra,
+                "message": {"content": [{"type": "tool_use", "name": "Skill", "input": {"skill": skill}}]}}
+
+    def test_transcript_uses_split_interactive_subagent_and_headless(self):
+        self.transcript("a.jsonl", [{"type": "user", "entrypoint": "claude-vscode", "cwd": os.path.abspath(os.sep + "work-not-temp"),
+                                     "message": {"content": "<command-name>/plug:alpha</command-name>"}},
+                                    self.skill_call("plug:alpha"), self.skill_call("beta")])
+        self.transcript("b.jsonl", [{"type": "user", "entrypoint": "sdk-cli", "message": {"content": "x"}},
+                                    self.skill_call("alpha")])
+        self.transcript("c.jsonl", [{"type": "user", "entrypoint": "claude-vscode", "cwd": tempfile.gettempdir(),
+                                     "message": {"content": "x"}}, self.skill_call("alpha")])
+        self.transcript("agent-1.jsonl", [self.skill_call("beta", isSidechain=True)], sub=True)
+        u = ew.transcript_uses(60)
+        self.assertEqual((u["alpha"]["interactive"], u["alpha"]["headless"], u["alpha"]["sessions"]), (2, 2, 1))
+        self.assertEqual((u["beta"]["interactive"], u["beta"]["subagent"]), (1, 1))
+        self.assertEqual(u["alpha"]["last"], "2026-09-29")
+
+    def test_peers_come_from_enabled_plugins_only(self):
+        c = self.t / "claude"
+        for key, on in (("on@m", True), ("off@m", False)):
+            root = c / "plugins" / "cache" / key.split("@")[0]
+            (root / "skills" / key.split("@")[0]).mkdir(parents=True)
+            (root / "skills" / key.split("@")[0] / "SKILL.md").write_text("---\nname: x\ndescription: d\n---\n", encoding="utf-8")
+        (c / "plugins" / "installed_plugins.json").write_text(json.dumps({"version": 2, "plugins": {
+            "on@m": [{"installPath": str(c / "plugins" / "cache" / "on")}],
+            "off@m": [{"installPath": str(c / "plugins" / "cache" / "off")}]}}), encoding="utf-8")
+        (c / "settings.json").write_text(json.dumps({"enabledPlugins": {"on@m": True, "off@m": False}}), encoding="utf-8")
+        self.assertEqual(list(ew.enabled_plugins()), ["on@m"])
+        self.assertEqual(ew.installed_as("on"), "plugin on@m")
+        self.assertIsNone(ew.installed_as("off"))
+        target = self.t / "repo" / "skills" / "me" / "SKILL.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("---\nname: me\ndescription: d\n---\n", encoding="utf-8")
+        names = {p.parent.name for p in ew.peer_skill_files(target)}
+        self.assertIn("on", names)
+        self.assertNotIn("off", names)
+
+    def test_baseline_notes_are_read_as_runs_or_predictions(self):
+        s = ew.baseline_status
+        self.assertEqual(s({"baseline": "2026-09-13 tester agent, skill absent: passed anyway (init found via --help)"}), "passed")
+        self.assertEqual(s({"baseline": "2026-09-25, skill absent: a table was written but without the header, so the case fails without the skill"}), "failed")
+        self.assertEqual(s({"baseline": "2026-09-06 (expected, not yet run): without the skill a fresh session writes prose"}), "not-run")
+        self.assertEqual(s({"baseline": "filled by the first run: what a fresh session does"}), "not-run")
+        self.assertEqual(s({"baseline": "without the skill a fresh session answers in chat, with no saved answer"}), "not-run")
+        self.assertEqual(s({"redundant": True, "baseline": ""}), "passed")
+        self.assertEqual(s({}), "not-run")
+
+    def unit_with_cases(self, cases, scripts=("tool.py",)):
+        u = self.t / "unit"
+        (u / "evals").mkdir(parents=True, exist_ok=True)
+        (u / "scripts").mkdir(exist_ok=True)
+        for s_ in scripts:
+            (u / "scripts" / s_).write_text("print(1)\n", encoding="utf-8")
+        (u / "SKILL.md").write_text("---\nname: unit\ndescription: d\n---\nbody\n", encoding="utf-8")
+        (u / "evals" / "evals.json").write_text(json.dumps({"skill": "unit", "evals": cases}), encoding="utf-8")
+        return u
+
+    def test_process_only_cases_and_evidence_report(self):
+        u = self.unit_with_cases([
+            {"id": "action-1", "kind": "action", "evidence": {"type": "trace", "tool": "Bash", "input_match": "tool\\.py run"},
+             "baseline": "2026-09-01: skill absent, passed anyway"},
+            {"id": "action-2", "kind": "action", "evidence": {"type": "trace", "tool": "Bash", "input_match": "tool\\.py",
+                                                              "or": {"type": "file", "path": "out.md"}},
+             "baseline": "2026-09-01: skill absent, passed anyway"},
+            {"id": "trigger-1", "kind": "trigger", "prompt": "p"}])
+        ev = ew.evidence_report(u)
+        self.assertEqual(ev["value_cases"], ["action-1", "action-2"])
+        self.assertEqual(ev["process_only"], ["action-1"])
+        self.assertEqual(ev["baseline"]["passed"], ["action-1", "action-2"])
+        modes = ew.failure_modes({"usage": {"days": 60, "interactive": 0, "subagent": 0, "headless": 3},
+                                  "installed": "user", "age_days": 30}, ev, None)
+        self.assertEqual([m["mode"] for m in modes], [1, 2])
+        self.assertIn("3 headless", modes[0]["evidence"])
+        young = ew.failure_modes({"usage": {"days": 60, "interactive": 0, "subagent": 0, "headless": 0},
+                                  "installed": "user", "age_days": 3}, None, None)
+        self.assertEqual(young, [])
+        self.assertIn("no value case", ew.evidence_gaps({"value_cases": [], "baseline": {}, "process_only": []}, None)[0])
+
+    def test_ab_modes_and_manual_rulings_survive_record(self):
+        ab_none = {"delta": 0.0, "margin": 0.3, "cost_ratio": 1.0}
+        self.assertEqual(ew.failure_modes({}, None, ab_none)[0]["mode"], 3)
+        self.assertEqual(ew.failure_modes({}, None, dict(ab_none, cost_ratio=2.0))[0]["mode"], 4)
+        self.assertEqual(ew.failure_modes({}, None, dict(ab_none, delta=-0.6))[0]["mode"], 4)
+        u = self.unit_with_cases([])
+        eg.init_unit(u, kind="skill", tier="moderate") if hasattr(eg, "init_unit") else (u / "evergreen.json").write_text(
+            json.dumps({"evergreen": "1", "name": "unit", "kind": "skill"}), encoding="utf-8")
+        ew.set_manual(u, "unit", "SUPERSEDED", "vendor plugin does it", "vendor-cli (2026-09-09)")
+        rs = ew.assess(u, peers=False, uses=False)
+        self.assertEqual(rs[0]["verdict"], "SUPERSEDED")
+        self.assertEqual(rs[0]["modes"][-1]["mode"], 5)
+        ew.record(rs)
+        st = json.loads((u / "evergreen.json").read_text(encoding="utf-8"))
+        self.assertTrue(st["worth"]["skills"]["unit"]["manual"])
+        self.assertEqual(ew.worth_flags(st), ["worth:SUPERSEDED"])
+        self.assertEqual(ew.worth_flags({"worth": {"skills": {"a": {"verdict": "UNPROVEN", "modes": [1]}}}}), ["worth:UNUSED"])
+        self.assertIn("triage", ew.render_triage(rs).splitlines()[0])
+
+    def test_grader_reads_every_evidence_shape(self):
+        run = self.t / "run"
+        (run / "out").mkdir(parents=True)
+        (run / "out" / "a.md").write_text("hello VideoTexture\n", encoding="utf-8")
+        res = {"uses": [{"name": "PowerShell", "input": {"command": "python scripts/tool.py go"}},
+                        {"name": "Write", "input": {"file_path": "x/src/index.js"}}], "answer": "Evidence: a file. Never the reply's claim."}
+        g = lambda ev: eab.grade(ev, run, res, {}, None)  # noqa: E731
+        self.assertEqual(eab.tool_regex("a shell tool (Bash, PowerShell, run_in_terminal)"), "Bash|PowerShell|run_in_terminal")
+        self.assertTrue(g({"type": "trace", "tool": "a shell tool (Bash, PowerShell)", "input_match": "tool\\.py"}))
+        self.assertFalse(g({"type": "trace", "tool": "Bash", "input_match": "tool\\.py"}))
+        self.assertTrue(g({"type": "file", "path": "out/*.md", "regex": "VideoTexture"}))
+        self.assertTrue(g({"type": "file", "path": "nope.md", "absent": True}))
+        self.assertIsNone(g({"type": "file", "path": "<vault>/x.md"}))
+        self.assertTrue(eab.grade({"type": "file", "path": "<vault>/a.md"}, run, res, {"vault": str(run / "out")}, None))
+        self.assertTrue(g({"type": "trace", "tool": "Bash", "input_match": "zzz", "or": {"type": "file", "path": "out/a.md"}}))
+        self.assertFalse(g({"type": "trace", "tool": "PowerShell", "and": {"type": "file", "path": "missing.md"}}))
+        self.assertIsNone(g({"type": "trace", "tool": "PowerShell", "and": {"type": "command", "command": "x", "must_change": True}}))
+        self.assertTrue(g({"all": [{"type": "sequence", "steps": [{"tool": "PowerShell"}, {"tool": "Write", "input_match": "index\\.js"}]}]}))
+        self.assertFalse(g({"all": [{"type": "sequence", "steps": [{"tool": "Write"}, {"tool": "PowerShell"}]}]}))
+        self.assertTrue(eab.grade_case({"expectations": ["regex on the answer: (evidence|file).*(never|not).*(claim|reply)"]}, run, res, {}, None))
+        self.assertIsNone(eab.grade_case({"expectations": ["the answer is good (judge)"]}, run, res, {}, None))
+        home = self.t / "home2"
+        (home / "scripts").mkdir(parents=True)
+        (home / "scripts" / "ok.py").write_text("import sys; sys.exit(0 if 'VideoTexture' in open(sys.argv[1]).read() else 1)\n", encoding="utf-8")
+        self.assertTrue(eab.run_check("python scripts/ok.py out/a.md exits 0", run, home))
+        self.assertIsNone(eab.run_check("python scripts/ok.py out/a.md exits 0 and reports nothing odd", run, home))
+
+    def test_probe_anchors_skip_upkeep_sections_and_plain_words(self):
+        body = ("# X\n\nRun `vault_lint.py --json` then `obsidian search query=x`; read `INDEX.md` and `the file`.\n\n"
+                "## Maintenance\n\nCheck `evergreen.json` and `next_due`.\n")
+        a = eab.key_anchors(body, "x")
+        for want in ("vault_lint.py", "--json", "obsidian", "INDEX.md"):
+            self.assertIn(want, a)
+        for no in ("evergreen.json", "next_due", "the", "file", "search"):
+            self.assertNotIn(no, a)
 
 
 if __name__ == "__main__":
