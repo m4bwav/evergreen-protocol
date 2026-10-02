@@ -61,3 +61,45 @@ This book is public. A recipe here names no person, host, drive or private path,
 - linux: `curl -fsSL https://claude.ai/install.sh | bash`
 - npm: `npm install -g @anthropic-ai/claude-code`
 - any: then run `claude` once and sign in (manual)
+
+## Access
+
+Generic routes to read access; the probe that proves each belongs in the unit's Needs table, since it names the unit's own resource. Who grants it in a given organisation, and its internal links, go in the store book, never here.
+
+### azure-signin
+
+- any: sign in to Azure in a terminal of your own (manual)
+  1. Run `az login` in your own terminal (on Windows it opens the account picker; with no browser use `az login --use-device-code`).
+  2. Pick the subscription the resource lives in: `az account set --subscription <name or id>`.
+  3. Re-run the check; the probe for this need is `az account show -o none`.
+
+### appinsights-read
+
+- any: get read access to the Application Insights resource (manual)
+  1. Sign in to Azure first (`azure-signin`).
+  2. Make sure the query command is installed: `az extension add --name application-insights` (it is an extension; its automatic install can stop on a prompt, so a probe that relies on it hangs).
+  3. Ask the resource's owner, or anyone with Owner, User Access Administrator or Role Based Access Control Administrator on it, for Monitoring Reader on the Application Insights resource or its resource group (it reads telemetry and runs log queries, and writes nothing); for queries straight against a workspace-based resource's Log Analytics workspace, Log Analytics Reader on the workspace. `evergreen.py setup <unit> --request <id>` drafts the request.
+  4. Query API keys were retired on 2026-03-31; use Entra ID sign-in, not a key.
+  5. When the grant arrives (often within the hour, sometimes a ticket and days), re-run the check; role assignments can take a few minutes to apply.
+
+### postgres-read
+
+- any: get a read-only database login (manual, secret)
+  1. Ask the database's owner for a read-only role on the database or schema the skill reads, not on the whole server.
+  2. Put the connection in `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and the password in `~/.pgpass` (`%APPDATA%\postgresql\pgpass.conf` on Windows), never in the chat or a committed file.
+  3. Reachability first: a host that does not answer is a network or VPN need, not a permission one.
+  4. The probe is `psql -w -X -c "select 1"` (`-w` never prompts for a password).
+
+### sqlserver-read
+
+- any: get read access to an Azure SQL or SQL Server database (manual)
+  1. Sign in to Azure first when the server uses Entra ID (`azure-signin`).
+  2. Ask the database's owner to create a database user for your account and add it to `db_datareader` (read only) on that database.
+  3. The probe is `sqlcmd -S <server> -d <database> --authentication-method ActiveDirectoryDefault -Q "select 1"` (`ActiveDirectoryInteractive` opens a browser, so it is not a probe).
+
+### github-repo
+
+- any: get read access to a private repository (manual)
+  1. Sign in: `gh auth login` in your own terminal.
+  2. Ask a repository or organisation admin to add your account (Read is enough to clone and query); for an organisation with SSO, authorise your token for it afterwards.
+  3. The probe is `gh api repos/<owner>/<repo> --jq .full_name`.

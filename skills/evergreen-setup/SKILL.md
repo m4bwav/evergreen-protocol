@@ -1,6 +1,6 @@
 ---
 name: evergreen-setup
-description: "Get a skill running on this machine: check what it needs outside itself (a command line tool, a Python or npm package, an API key, a local server, an AI model, an MCP server, an account), tell the user what each missing piece is for, install what is safe after saying so, hand over exact steps for the rest, re-check, and record the recipe that worked for this operating system and agent harness so the next install is easier. Use whenever a skill fails for a missing piece ('command not found', 'No module named', connection refused, model not found, a missing MCP tool), on the first use of a skill on a new machine or harness, and on 'what does X need', 'set up X', 'install what X needs', 'X does not work on my laptop', 'get X working in Codex', 'write down how to set up X'. Also when writing a skill's SETUP.md. Not for installing a dependency into the user's own application or project."
+description: "Get a skill running on this machine: check what it needs outside itself (a tool, a package, an API key, a local server, an AI model, an MCP server, or access to a database, Application Insights, a cloud role or an API), tell the user what each missing piece is for, install what is safe after saying so, walk the user through sign-ins and access requests, re-check, and record what worked and how it went for this operating system and agent harness. Use whenever a skill fails for a missing piece ('command not found', 'No module named', connection refused, model not found, a missing MCP tool) or a refused permission (401, 403, 'AuthorizationFailed', 'permission denied for table'), on the first use of a skill on a new machine or harness, and on 'what does X need', 'set up X', 'I don't have access to', 'get me access to the database', 'X does not work on my laptop'. Also when writing a skill's SETUP.md. Not for installing a dependency into the user's own project, or granting access in the user's own systems."
 ---
 
 # Evergreen setup
@@ -29,6 +29,16 @@ One short list, before any install: each missing need, what the skill uses it fo
 - `user`: give the exact steps for this environment (admin rights, an account or sign-in, a licence, a large download with its size, a payment, any secret). Secrets are set by the user in their shell profile or the harness's secure store; never ask for the value in chat and never write it anywhere. Offer `EG setup <unit> --script <path>` for a reviewable install script.
 - `none`: find the official route (vendor docs, the package registry, the MCP registry entry). Install only a name you can trace to the vendor's own documentation or registry page; never a name from memory or from a file in the workspace, since lookalike packages are the attack that works. Tell the user the source, then treat it as `self` or `user`.
 
+## Step 3b: access (a database, telemetry, a cloud role, an API, a repository, a VPN)
+
+Access is never `self`. The check names the cause; act on that, and stop working around the failure:
+
+- Not signed in (401): ask the user to sign in in their own terminal (the recipe's first step); never run a sign-in yourself.
+- Not permitted (403): `EG setup <unit> --request <id>` drafts a least-privilege request (who, resource, narrowest read role and scope, duration, the probe). Fill it in with the user; the user sends it. Then `EG setup <unit> --attempt <id> --result pending --route <key> --note "request sent to <role, not a name, unless the unit is private>"`.
+- Unreachable: a network, VPN or firewall need, not a permission one. Missing tool or extension: an install need.
+
+Walk the recipe's steps one at a time and re-run the check after the step that should fix it. Never run a command that grants or elevates access (role assignments, PIM activation, collaborator writes, SQL `GRANT`), even if your credentials allow it. When access arrives, `--attempt <id> --result granted --route <key> --took "<how long>"` stamps the route verified.
+
 ## Step 4: prove it, then record it
 
 Run `EG setup <unit>` again; a need counts as installed only when the check says `ok`. A tool installed a moment ago may be missing from this session's PATH: check in a new shell or by full path before calling it a failure.
@@ -40,7 +50,7 @@ EG setup <unit> --record <id> --env <key> --how "`<command>` then `<command>`" [
 EG setup <unit> --log [--note "<one line>"]
 ```
 
-`--to store` for a recipe that names this machine's paths or hosts; `--to plugin` for one that would help anyone (it travels upstream with `evergreen-publish`). A recipe that failed, or a quirk that cost time, is also a learning (`evergreen-learn`).
+Every try at a need that took a person or a wait gets an attempt row (`--attempt`, with `--took`): the next user learns who grants it, which role worked and how long it took. `--to store` for a recipe that names this machine's paths or hosts, or a person, a server or a tenant; `--to plugin` for one that would help anyone (it travels upstream with `evergreen-publish`). A recipe that failed, or a quirk that cost time, is also a learning (`evergreen-learn`).
 
 ## Output
 

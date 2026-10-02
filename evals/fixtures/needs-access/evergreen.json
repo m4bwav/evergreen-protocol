@@ -1,0 +1,17 @@
+{
+  "evergreen": "1.0",
+  "name": "orders-report",
+  "kind": "skill",
+  "main": "SKILL.md",
+  "files": {
+    "setup": "SETUP.md"
+  },
+  "protocol": "plugin",
+  "tier": "none",
+  "interval_days": null,
+  "last_checked": "2026-10-02",
+  "next_due": null,
+  "setup": {
+    "envs": []
+  }
+}

@@ -6,7 +6,7 @@ When a step fails for a missing piece (command not found, a module that will not
 
 ## Needs
 
-One row per dependency. `kind`: command, python, env, file, url, ollama (checked by the script); mcp, account, manual (checked by the agent). `check`: a command (alternatives with `|`, a minimum with `>= 3.9`), a module, a variable name (its value is never printed), a path (`~` and globs work), a URL, a model name. `if missing`: `required`, or `optional: what is lost or the fallback`.
+One row per dependency. `kind`: command, python, env, file, url, ollama, access (checked by the script); mcp, account, manual (checked by the agent). An `access` check is a read-only, non-interactive probe that exits 0 only when the access works (`az account show -o none`, `psql -w -X -c "select 1"`, `gh api repos/<owner>/<repo> --jq .full_name`); never one that signs in, writes, or prints tokens. `check`: a command (alternatives with `|`, a minimum with `>= 3.9`), a module, a variable name (its value is never printed), a path (`~` and globs work), a URL, a model name. `if missing`: `required`, or `optional: what is lost or the fallback`.
 
 | id | kind | check | for | if missing |
 |---|---|---|---|---|
@@ -19,6 +19,15 @@ One `### <id>` block per need, one line per environment key, best first. Keys: a
 ### <id>
 
 - any: <official install page or steps>
+
+An access recipe is a line with indented numbered steps the agent walks the user through, one at a time: sign in, ask for the narrowest read role at the narrowest scope (`evergreen.py setup <unit> --request <id>` drafts the request), wait, re-check. Names of people, internal links, server and tenant ids go here only when this unit is private; otherwise in the store book.
+
+## Attempts
+
+How each try at getting a need went, newest last (`evergreen.py setup <unit> --attempt <id> --result granted|done|pending|refused|failed --route <key> --took "..." --note "..."`).
+
+| date | need | env | route | result | took | notes |
+|---|---|---|---|---|---|---|
 
 ## Environments met
 
