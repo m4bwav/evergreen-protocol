@@ -95,15 +95,15 @@
     "learnings": 24,
     "changes": 38,
     "research": 50,
-    "tests": 4
+    "tests": 5
   },
   "consolidate_every": 25,
   "tests": {
-    "last_run": "2026-09-30T07:37",
-    "harness": "claude plugin eval 2.1.281 (trigger-7, trigger-8, decoy-4, trigger-2, trigger-5); scripts/test_evergreen.py",
+    "last_run": "2026-10-02T08:04",
+    "harness": "claude plugin eval 2.1.287 (trigger-9, trigger-10, decoy-5, outcome-2, trigger-4); worth --ab action-3 (sonnet); scripts/test_evergreen.py",
     "env": "owner-pc",
-    "cases": 5,
-    "passed": 5,
+    "cases": 6,
+    "passed": 6,
     "failed": 0,
     "failing": [],
     "last_failure": null,
@@ -114,5 +114,30 @@
       "windows/claude-code"
     ],
     "last_check": "2026-10-02"
+  },
+  "worth": {
+    "checked": "2026-10-02",
+    "skills": {
+      "evergreen-setup": {
+        "verdict": "CUT",
+        "why": "the model already passes 100% without the skill (+0 points (noise margin 33)); write a harder case the skill exists for, or retire it",
+        "body_tokens": 1044,
+        "listing_tokens": 224,
+        "specific_share": 0.85,
+        "delta": 0.0,
+        "cost_ratio": 1.29,
+        "modes": [
+          4
+        ],
+        "gaps": 0,
+        "checked": "2026-10-02",
+        "uses": {
+          "days": 60,
+          "interactive": 0,
+          "subagent": 0,
+          "headless": 0
+        }
+      }
+    }
   }
 }
