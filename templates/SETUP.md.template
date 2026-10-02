@@ -1,0 +1,26 @@
+# Setup: {{NAME}}
+
+What [{{MAIN}}]({{MAIN}}) needs outside itself, what each piece is for, how to check it, and how to install it on each environment met so far. Format and rules: the protocol's `SETUP.md` spec. Check here with `evergreen.py setup <this folder>`; it reads the tables below, so keep their shape.
+
+When a step fails for a missing piece (command not found, a module that will not import, a refused connection, an unknown model), or this environment is not in Environments met: run the check, tell the user what is missing and what it is for, install what you can after saying so, hand the rest to the user with the exact steps, re-check, then record what worked (`--record ... --verified`) and the environment (`--log`).
+
+## Needs
+
+One row per dependency. `kind`: command, python, env, file, url, ollama (checked by the script); mcp, account, manual (checked by the agent). `check`: a command (alternatives with `|`, a minimum with `>= 3.9`), a module, a variable name (its value is never printed), a path (`~` and globs work), a URL, a model name. `if missing`: `required`, or `optional: what is lost or the fallback`.
+
+| id | kind | check | for | if missing |
+|---|---|---|---|---|
+| <id> | command | `<tool> --version` | <what the skill uses it for, and in which step> | required |
+
+## Install
+
+One `### <id>` block per need, one line per environment key, best first. Keys: an operating system (`windows`, `macos`, `linux`, `wsl`), a harness (`claude-code`, `cowork`, `codex`, `copilot`, `cursor`, `gemini-cli`), a package manager on PATH (`winget`, `brew`, `apt`, `pip`, `uv`, `npm`, `ollama`), a combination (`linux/apt`, `windows/claude-code`), or `any`. A line is backticked commands joined by `then` (scriptable) or prose steps. Tags in a trailing parenthesis: `admin` (elevation or sudo), `manual` (a person must act: an account, a licence, a GUI), `large` (a big download), `secret` (a key or token the user holds), `paid`, and `verified YYYY-MM-DD on <os>/<harness>`. Shared recipes for common tools are in the plugin's `setup/RECIPES.md`; only list one here when this skill needs something different.
+
+### <id>
+
+- any: <official install page or steps>
+
+## Environments met
+
+| date | os | harness | missing | notes |
+|---|---|---|---|---|

@@ -45,6 +45,8 @@ EG init <skill-dir> --name <name> --topic "<one line>" --kind skill --tier <tier
 
 Skills inside the plugin, or in a repo that vendors the plugin under `.agents/`, link to `../../protocol/PROTOCOL.md`. A skill that lives elsewhere on a machine that has the plugin (a tool's skill store, its own folder) gets `--pointer`: its protocol is the installed plugin, found through the registry, so the skill does not change when the plugin updates. `--standalone` (a full `MAINTENANCE.md` copy) is for a skill that will travel to machines with no plugin.
 
+A skill that needs anything outside itself (a tool, a package, a key, a server, a model, an MCP server, an account) gets `SETUP.md` now: `EG setup <skill-dir> --init`, one Needs row per dependency with what it is for and its fallback, recipes only where the shared book (`setup/RECIPES.md`) does not cover it, a link from SKILL.md's Step 0, then `EG setup <skill-dir> --log` once the check passes here (PROTOCOL.md §12, `evergreen-setup`).
+
 Fill RESEARCH.md properly: Current understanding (what the skill asserts and how confident you are, including what tooling exists for the subject), Search plan in its four tracks (subject: the time-sensitive claims as queries with primary sources; tooling, practice and testing: the template's queries with `<topic>` filled in and anything better found today), and an `R-` entry per track recording what today's research found, a one-liner when a track was quiet. If the skill was written from model knowledge without a web check, say so in the `R-` entry and set `--last-checked` to today anyway; the first refresh will do the verification. For `fast` and `live` topics, do the web check now: model knowledge is almost always stale there.
 
 ## Step 4: prove it, then hand over

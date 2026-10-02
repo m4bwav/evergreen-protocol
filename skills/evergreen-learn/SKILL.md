@@ -23,8 +23,9 @@ Most specific home wins:
 
 1. The skill or unit in use → its `LEARNINGS.md` (scope `skill`).
 2. About a repo or system → its codemap: `EVERGREEN_HOME/maps/<slug>/LEARNINGS.md`, and the Gotchas section of `CODEMAP.md` if it is structural. No map yet? Create one with `evergreen-map`.
-3. About an environment (this PC, the work laptop, Cowork's sandbox, a CI runner) → `<plugin root>/profile/ENVIRONMENTS.md` (scope `env:<name>`).
-4. About how the user wants AI to work, anywhere → `<plugin root>/profile/AI-PREFERENCES.md` (scope `global`).
+3. How to install or set up something a skill needs on an environment (a command, a package id, a model download) → that skill's `SETUP.md` as a recipe (`EG setup <unit> --record ...`, `evergreen-setup`); a recipe for any skill goes to the shared or store book. A dead end on the way is still a learning here.
+4. About an environment (this PC, the work laptop, Cowork's sandbox, a CI runner) → `<plugin root>/profile/ENVIRONMENTS.md` (scope `env:<name>`).
+5. About how the user wants AI to work, anywhere → `<plugin root>/profile/AI-PREFERENCES.md` (scope `global`).
 
 Installed read-only copy? Write to the `source` path in its `evergreen.json`.
 
