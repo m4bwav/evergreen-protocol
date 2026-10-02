@@ -1974,5 +1974,143 @@ class Setup(unittest.TestCase):
             self.assertTrue(book.get(tool), tool)
 
 
+
+def py_probe(code: str) -> str:
+    """A probe command line that runs this interpreter on a one-line program (cmd.exe and sh both accept it)."""
+    return f'"{sys.executable}" -c "{code}"'
+
+
+ACCESS_FIXTURE = """# Setup: a
+
+## Needs
+
+| id | kind | check | for | if missing |
+|---|---|---|---|---|
+| db | access | `{ok}` | reading the orders table in Step 2 | required |
+| insights | access | `{denied}` | querying request telemetry in Step 3 | required |
+
+## Install
+
+### insights
+
+- any: ask the resource owner for a read role on the telemetry resource (manual)
+  1. Run `az login` in your own terminal and finish the browser sign-in.
+  2. Ask the owner for Monitoring Reader on the resource; the request text names the resource and the reason.
+  3. Wait for the grant, then re-run the check.
+- windows: `az extension add --name application-insights`
+Not a step: a plain paragraph ends the steps.
+
+## Attempts
+
+| date | need | env | route | result | took | notes |
+|---|---|---|---|---|---|---|
+| 2026-09-30 | insights | windows/claude-code | any | pending | | ticket opened |
+| 2026-10-01 | db | windows/claude-code | any | pending | | asked the DBA |
+
+## Environments met
+
+| date | os | harness | missing | notes |
+|---|---|---|---|---|
+"""
+
+
+class SetupAccess(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["EVERGREEN_HOME"] = str(Path(self.tmp.name) / "home")
+        self.d = Path(self.tmp.name) / "a"
+        eg.main(["init", str(self.d), "--name", "a", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        text = ACCESS_FIXTURE.replace("{ok}", py_probe("print(1)")).replace(
+            "{denied}", py_probe("import sys; sys.stderr.write('ERROR: (AuthorizationFailed) 403 Forbidden'); sys.exit(1)"))
+        (self.d / "SETUP.md").write_bytes(text.encode("utf-8"))
+        _, st = eg.load_state(self.d)
+        st.setdefault("files", {})["setup"] = "SETUP.md"
+        eg.save_state(self.d, st)
+        self.env = {"os": "windows", "extra": [], "harness": "claude-code", "managers": [], "key": "windows/claude-code",
+                    "facets": {"windows", "claude-code"}}
+
+    def tearDown(self):
+        os.environ.pop("EVERGREEN_HOME", None)
+        self.tmp.cleanup()
+
+    def test_probe_classifies_signin_permission_missing_tool_and_redacts(self):
+        self.assertEqual(esu.check_access(py_probe("print(1)")), (True, "probe passed"))
+        ok, why = esu.check_access(py_probe("import sys; sys.stderr.write('Please run az login to setup account.'); sys.exit(1)"))
+        self.assertFalse(ok)
+        self.assertIn("401", why)
+        ok, why = esu.check_access(py_probe("import sys; sys.stderr.write('403 Forbidden'); sys.exit(1)"))
+        self.assertIn("403", why)
+        token = "eyJ" + "a" * 60
+        ok, why = esu.check_access(py_probe(f"import sys; sys.stderr.write('bad token {token}'); sys.exit(3)"))
+        self.assertNotIn(token, why)
+        self.assertIn("<redacted>", why)
+        self.assertIn("probe exit 3", why)
+        ok, why = esu.check_access("evergreen-no-such-tool-xyz --whoami")
+        self.assertIn("tool or extension is missing", why)
+        ok, why = esu.check_access(py_probe("import sys; sys.stderr.write('could not connect: Name or service not known'); sys.exit(2)"))
+        self.assertIn("network, VPN or firewall", why)
+        self.assertEqual(esu._redact("Authorization: Bearer abc.def password=hunter2;x"), "Authorization: Bearer <redacted> password=<redacted>;x")
+
+    def test_request_draft_is_least_privilege_and_names_the_probe(self):
+        text = capture(["setup", str(self.d), "--request", "insights", "--os", "windows", "--harness", "claude-code"])
+        self.assertIn("read-only access", text)
+        self.assertIn("Monitoring Reader", text)
+        self.assertIn("not the whole subscription", text)
+        self.assertIn("AuthorizationFailed", text)  # the probe is quoted as the check
+        self.assertIn("--attempt insights --result pending", text)
+
+    def test_probe_timeout_names_an_interactive_prompt(self):
+        old = esu.ACCESS_TIMEOUT
+        esu.ACCESS_TIMEOUT = 1
+        try:
+            ok, why = esu.check_access(py_probe("import time; time.sleep(5)"))
+        finally:
+            esu.ACCESS_TIMEOUT = old
+        self.assertFalse(ok)
+        self.assertIn("non-interactive", why)
+
+    def test_recipe_steps_parse_and_access_is_always_the_users(self):
+        book = esu.parse_recipes((self.d / "SETUP.md").read_text(encoding="utf-8"), "unit")
+        anyr, winr = book["insights"]
+        self.assertEqual(len(anyr["steps"]), 3)
+        self.assertTrue(anyr["steps"][0].startswith("Run `az login`"))
+        self.assertEqual(winr["steps"], [])
+        self.assertEqual(esu.classify(anyr), "user")
+        rows = {r["id"]: r for r in esu.run_checks(self.d, esu.parse_needs((self.d / "SETUP.md").read_text(encoding="utf-8")), self.env)}
+        self.assertEqual(rows["db"]["status"], "ok")
+        self.assertEqual(rows["insights"]["status"], "missing")
+        self.assertEqual(rows["insights"]["cls"], "user")  # the windows recipe is a plain command, but access is never the agent's
+        self.assertEqual(rows["insights"]["last_attempt"]["result"], "pending")
+        skipped = esu.run_checks(self.d, esu.parse_needs((self.d / "SETUP.md").read_text(encoding="utf-8")), self.env, skip_access=True)
+        self.assertEqual({r["status"] for r in skipped}, {"agent"})
+
+    def test_render_shows_steps_pending_attempts_and_a_grant_to_record(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+            eg.main(["setup", str(self.d), "--os", "windows", "--harness", "claude-code"])
+        self.assertEqual(cm.exception.code, 1)
+        text = out.getvalue()
+        self.assertIn("signed in but not permitted (403)", text)
+        self.assertIn("last attempt 2026-09-30 via any: pending", text)
+        self.assertIn("2. Ask the owner for Monitoring Reader", text)
+        self.assertIn("GRANTED? db works now", text)
+
+    def test_attempt_logs_a_row_and_stamps_the_route_verified(self):
+        msg = capture(["setup", str(self.d), "--attempt", "db", "--result", "granted", "--route", "any", "--took", "1 day",
+                       "--note", "DBA added a read role", "--os", "windows", "--harness", "claude-code"])
+        self.assertIn("no recipe 'any' under ### db", msg)
+        capture(["setup", str(self.d), "--attempt", "insights", "--result", "granted", "--route", "any", "--took", "2 days (ticket)",
+                 "--os", "windows", "--harness", "claude-code"])
+        text = (self.d / "SETUP.md").read_text(encoding="utf-8")
+        self.assertIn("| db | windows/claude-code | any | granted | 1 day | DBA added a read role |", text)
+        self.assertRegex(text, r"- any: ask the resource owner .* \(manual, verified \d{4}-\d{2}-\d{2} on windows/claude-code\)")
+        self.assertIn("  1. Run `az login`", text)  # the steps under the stamped line are kept
+        self.assertEqual(esu.latest_attempts(text)["insights"]["result"], "granted")
+        self.assertLess(text.index("| insights | windows/claude-code | any | granted"), text.index("## Environments met"))
+        with self.assertRaises(SystemExit) as cm, contextlib.redirect_stderr(io.StringIO()):
+            eg.main(["setup", str(self.d), "--attempt", "db", "--result", "maybe"])
+        self.assertEqual(cm.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

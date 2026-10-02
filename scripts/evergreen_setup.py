@@ -22,6 +22,19 @@ and then the plugin's shared book (setup/RECIPES.md).
                   add or replace one recipe line (delta edit); --verified stamps today and this environment key
   --log           append this environment and what is missing to Environments met and evergreen.json setup.envs
   --init          write SETUP.md from the template and add it to the unit's files map
+  --attempt ID --result granted|done|pending|refused|failed [--route KEY] [--took TEXT] [--note TEXT]
+                  log how getting a need went (Attempts table); a granted or done result with --route stamps that recipe
+                  verified for this environment
+  --skip-access   do not run the `access` probes (each is a read-only command that may take a few seconds)
+  --request ID    print a least-privilege access request for an administrator: who, resource, read role, narrowest
+                  scope, duration, the probe that will prove it; the agent fills it in with the user, never sends it alone
+
+Access needs (a database, a telemetry store, a cloud role, an API scope, a repository, a VPN) are kind `access`: the
+check is a read-only, non-interactive probe command that exits 0 only when the access works. A failed probe says
+whether it looks like a sign-in problem (401, not logged in) or a permission problem (403, forbidden). Access is
+always the user's to obtain: recipes for it are steps (indented numbered lines under the recipe line) the agent
+walks the user through, one at a time, re-probing at the end, and the Attempts table keeps how each try went,
+including requests still pending with an administrator.
 
 Checks never install, never print a secret's value, and time out in seconds. Exit codes: 0 every required need is
 present, 1 one is missing, 2 a usage error. Pure standard library.
@@ -45,12 +58,23 @@ from pathlib import Path
 import evergreen as eg
 
 SETUP_FILE = "SETUP.md"
-CHECKABLE = ("command", "python", "env", "file", "url", "ollama")
+CHECKABLE = ("command", "python", "env", "file", "url", "ollama", "access")
 AGENT_CHECKED = ("mcp", "account", "manual")  # the script cannot see these; the agent checks them and says so
 USER_TAGS = ("admin", "manual", "large", "secret", "paid")  # a recipe with any of these waits for the user's yes
 MANAGERS = ("winget", "scoop", "choco", "brew", "port", "apt", "apt-get", "dnf", "yum", "pacman", "zypper", "apk",
             "nix", "pip", "pipx", "uv", "npm", "pnpm", "cargo", "go", "dotnet", "ollama", "docker")
 TIMEOUT = 4
+ACCESS_TIMEOUT = 20  # a probe is a network call with the user's credentials; long enough for a cold CLI, short enough to catch a prompt
+RESULTS = ("granted", "done", "pending", "refused", "failed", "partial")
+SIGNIN_RE = re.compile(r"\b401\b|unauthori[sz]ed|not logged in|az login|please (?:run|sign in|log ?in)|login required|"
+                       r"authentication (?:failed|required)|expired (?:token|credentials)|no credentials|AADSTS", re.I)
+DENIED_RE = re.compile(r"\b403\b|forbidden|AuthorizationFailed|does not have (?:authorization|permission)|permission denied|"
+                       r"access (?:is )?denied|insufficient (?:privileges|permissions)|not authorized|InsufficientAccountPermissions", re.I)
+SECRETISH_RE = re.compile(r"[A-Za-z0-9_\-.=+/]{32,}")
+CREDENTIAL_RE = re.compile(r"(bearer\s+|(?:password|pwd|passwd|apikey|api_key|token|secret|sig)\s*[=:]\s*)[^\s;&'\"]+", re.I)
+NETWORK_RE = re.compile(r"could not resolve|name or service not known|getaddrinfo|nodename nor servname|connection (?:refused|timed out|reset)|"
+                        r"network is unreachable|no route to host|ETIMEDOUT|ECONNREFUSED|server was not found|login timeout expired|"
+                        r"timeout expired|could not connect", re.I)
 
 # Harness detection (R-20261002-1): Cowork first (it also sets CLAUDECODE), then AI_AGENT (Claude Code since 2.1.120
 # sets `claude-code_<version>_agent`, Copilot `github_copilot_<surface>_agent`, Vercel's convention `name@version`),
@@ -174,7 +198,8 @@ def parse_needs(text: str) -> list[dict]:
     return out
 
 
-RECIPE_RE = re.compile(r"^\s*-\s+([a-z0-9][a-z0-9_.+/-]*):\s+(.*?)\s*$", re.I)
+RECIPE_RE = re.compile(r"^-\s+([a-z0-9][a-z0-9_.+/-]*):\s+(.*?)\s*$", re.I)
+STEP_RE = re.compile(r"^\s{2,}(?:\d+[.)]|[-*])\s+(.*\S)\s*$")
 TAIL_RE = re.compile(r"\s*\(([^()]*)\)\s*$")
 CMD_RE = re.compile(r"`([^`]+)`")
 
@@ -199,27 +224,34 @@ def parse_recipe_line(line: str) -> dict | None:
         how = how[:t.start()].rstrip()
     stripped = CMD_RE.sub("", how)
     commands = CMD_RE.findall(how) if re.fullmatch(r"[\s;]*(?:then[\s;]*)*", stripped, flags=re.I) else []
-    return {"key": key, "how": how, "commands": commands, "tags": tags, "verified": verified}
+    return {"key": key, "how": how, "commands": commands, "tags": tags, "verified": verified, "steps": []}
 
 
 def parse_recipes(text: str, source: str) -> dict[str, list[dict]]:
     body = section(text, "Install")
     body = text if body is None else body
     out: dict[str, list[dict]] = {}
-    current = None
+    current, last = None, None
     for ln in body.splitlines():
         h = re.match(r"^###\s+`?([^`\s]+)`?\s*$", ln)
         if h:
-            current = h.group(1)
+            current, last = h.group(1), None
             out.setdefault(current, [])
             continue
         if current and ln.startswith("## "):
-            current = None
+            current = last = None
         if current:
             r = parse_recipe_line(ln)
             if r:
                 r["source"] = source
                 out[current].append(r)
+                last = r
+                continue
+            s = STEP_RE.match(ln)
+            if s and last is not None:
+                last["steps"].append(s.group(1))
+            elif ln.strip():
+                last = None
     return out
 
 
@@ -232,7 +264,7 @@ def key_matches(key: str, env: dict) -> int | None:
 
 
 def classify(r: dict) -> str:
-    if not r["commands"] or any(t in USER_TAGS for t in r["tags"]):
+    if not r["commands"] or r.get("steps") or any(t in USER_TAGS for t in r["tags"]):
         return "user"
     return "self"
 
@@ -314,7 +346,40 @@ def _http_ok(url: str) -> tuple[bool, str, bytes]:
         return False, f"unreachable ({type(e).__name__})", b""
 
 
-def check_need(n: dict) -> tuple[str, str]:
+def _redact(line: str) -> str:
+    return SECRETISH_RE.sub("<redacted>", CREDENTIAL_RE.sub(lambda m: m.group(1) + "<redacted>", line))[:160]
+
+
+def check_access(probe: str) -> tuple[bool, str]:
+    """Run a read-only, non-interactive probe through the platform shell; exit 0 means the access works. Only the
+    exit code and one redacted error line are kept: a probe's output can hold data the user did not ask to see."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", PGCONNECT_TIMEOUT="10", AZURE_CORE_ONLY_SHOW_ERRORS="true")
+    try:
+        p = subprocess.run(probe, shell=True, capture_output=True, text=True, timeout=ACCESS_TIMEOUT,
+                           stdin=subprocess.DEVNULL, env=env, encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired:
+        return False, (f"probe timed out after {ACCESS_TIMEOUT}s: a sign-in, password or install prompt (probes must be "
+                       "non-interactive), or the network or VPN")
+    if p.returncode == 0:
+        return True, "probe passed"
+    text = (p.stderr or "") + "\n" + (p.stdout or "")
+    lines = [ln.strip() for ln in (p.stderr or p.stdout or "").splitlines() if ln.strip()]
+    first = _redact(lines[-1]) if lines else ""
+    if SIGNIN_RE.search(text):
+        why = "not signed in or the sign-in expired (401)"
+    elif DENIED_RE.search(text):
+        why = "signed in but not permitted (403): needs a role, grant or scope"
+    elif p.returncode in (127, 9009) or re.search(r"not recognized|command not found|No such file|extension .* not installed|"
+                                                   r"is misspelled or not recognized", text, re.I):
+        why = "the probe's tool or extension is missing (an install need, not access)"
+    elif NETWORK_RE.search(text):
+        why = "the resource is unreachable: network, VPN or firewall, not permission"
+    else:
+        why = f"probe exit {p.returncode}"
+    return False, why + (f": {first}" if first else "")
+
+
+def check_need(n: dict, skip_access: bool = False) -> tuple[str, str]:
     """('ok' | 'missing' | 'agent', detail). Never installs; never prints a secret."""
     kind, spec = n["kind"], os.path.expandvars(n["check"])
     try:
@@ -332,6 +397,10 @@ def check_need(n: dict) -> tuple[str, str]:
             why = "present" if ok else "not found"
         elif kind == "url":
             ok, why, _ = _http_ok(spec)
+        elif kind == "access":
+            if skip_access or not spec:
+                return "agent", (n["check"] or "no probe") + (" (probe skipped)" if skip_access else "")
+            ok, why = check_access(spec)
         elif kind == "ollama":
             host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
             host = host if host.startswith("http") else f"http://{host}"
@@ -347,18 +416,46 @@ def check_need(n: dict) -> tuple[str, str]:
     return ("ok" if ok else "missing"), why
 
 
-def run_checks(d: Path | None, needs: list[dict], env: dict) -> list[dict]:
+def parse_attempts(text: str) -> list[dict]:
+    body = section(text, "Attempts")
+    if body is None:
+        return []
+    rows = [ln for ln in body.splitlines() if ln.strip().startswith("|")]
+    if len(rows) < 2:
+        return []
+    head = [h.lower() for h in _cells(rows[0])]
+    out = []
+    for ln in rows[2:]:
+        c = _cells(ln)
+        row = {head[i]: c[i] for i in range(min(len(head), len(c)))}
+        if row.get("need"):
+            out.append(row)
+    return out
+
+
+def latest_attempts(text: str) -> dict[str, dict]:
+    last: dict[str, dict] = {}
+    for row in parse_attempts(text):
+        last[row["need"]] = row  # rows are appended, so the last one is the newest
+    return last
+
+
+def run_checks(d: Path | None, needs: list[dict], env: dict, skip_access: bool = False) -> list[dict]:
     books = load_books(d)
+    sp = (d / SETUP_FILE) if d else None
+    attempts = latest_attempts(sp.read_text(encoding="utf-8", errors="replace")) if sp and sp.exists() else {}
     out = []
     for n in needs:
-        status, why = check_need(n)
+        status, why = check_need(n, skip_access)
         row = dict(n, status=status, detail=why)
+        if n["id"] in attempts:
+            row["last_attempt"] = attempts[n["id"]]
         if status != "ok":
             rs = recipes_for(n["id"], books, env)
             row["recipes"] = [dict(r, cls=classify(r)) for r in rs]
             row["cls"] = rs and classify(rs[0]) or "none"
-            if n["kind"] == "env" and row["cls"] == "self":
-                row["cls"] = "user"  # a value a person holds; an agent never invents or handles it
+            if n["kind"] in ("env", "access") and row["cls"] == "self":
+                row["cls"] = "user"  # a value or a grant a person holds; an agent never invents, handles or grants it
         out.append(row)
     return out
 
@@ -413,6 +510,51 @@ def record_recipe(path: Path, nid: str, key: str, how: str, tags: list[str]) -> 
     return result
 
 
+ATTEMPTS_HEADER = "| date | need | env | route | result | took | notes |\n|---|---|---|---|---|---|---|\n"
+
+
+def append_row(p: Path, title: str, header: str, row: str) -> None:
+    text = p.read_text(encoding="utf-8") if p.exists() else ""
+    text = ensure_section(text, title, header)
+    if section(text, title).strip() == "":
+        text = text.rstrip("\n") + "\n\n" + header
+    body = section(text, title)
+    i = text.index(body) + len(body.rstrip("\n"))
+    text = text[:i] + "\n" + row + text[i:]
+    eg.write_lf(p, text.rstrip("\n") + "\n")
+
+
+def stamp_verified(path: Path, nid: str, key: str, env_key: str) -> bool:
+    """Mark one recipe line verified today on this environment, keeping its other tags; False when it is not there."""
+    if not path.exists():
+        return False
+    lines = path.read_text(encoding="utf-8").split("\n")
+    start = next((i for i, ln in enumerate(lines) if re.match(rf"^###\s+`?{re.escape(nid)}`?\s*$", ln)), None)
+    if start is None:
+        return False
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("#")), len(lines))
+    for i in range(start + 1, end):
+        r = parse_recipe_line(lines[i])
+        if r and r["key"] == key:
+            tags = [t for t in r["tags"] if t != "unverified"] + [f"verified {date.today().isoformat()} on {env_key}"]
+            lines[i] = f"- {key}: {r['how']} ({', '.join(tags)})"
+            eg.write_lf(path, "\n".join(lines).rstrip("\n") + "\n")
+            return True
+    return False
+
+
+def log_attempt(d: Path, st: dict, env: dict, nid: str, result: str, route: str = "", took: str = "", note: str = "") -> str:
+    p = unit_setup(d, st)
+    clean = lambda s: (s or "").replace("|", "/").replace("\n", " ").strip()
+    append_row(p, "Attempts", ATTEMPTS_HEADER, f"| {date.today().isoformat()} | {nid} | {env['key']} | {clean(route)} | {result} | {clean(took)} | {clean(note)} |")
+    if result in ("granted", "done") and route:
+        for book in (p, store_book()):
+            if stamp_verified(book, nid, route.lower(), env["key"]):
+                return f"logged; recipe {route} stamped verified in {book.name if book == p else 'the store book'}"
+        return f"logged; no recipe '{route}' under ### {nid} to stamp (record it with --record {nid} --env {route} --how ... --verified)"
+    return "logged"
+
+
 def log_environment(d: Path, st: dict, env: dict, missing: list[str], note: str = "") -> None:
     p = unit_setup(d, st)
     text = p.read_text(encoding="utf-8") if p.exists() else ""
@@ -449,6 +591,11 @@ def render(name: str, env: dict, rows: list[dict], new_env: bool, unit_arg: str)
     ok = [r["id"] for r in rows if r["status"] == "ok"]
     if ok:
         lines.append("ok       " + ", ".join(ok))
+    for r in rows:
+        la = r.get("last_attempt") or {}
+        if r["status"] == "ok" and la.get("result") == "pending":
+            lines.append(f"GRANTED? {r['id']} works now; its {la.get('date', '')} attempt via {la.get('route') or '?'} is still logged as pending: "
+                         f"--attempt {r['id']} --result granted --route {la.get('route') or '<key>'} --took \"...\"")
     counts = {"self": 0, "user": 0, "none": 0, "agent": 0}
     for r in rows:
         if r["status"] == "ok":
@@ -462,9 +609,16 @@ def render(name: str, env: dict, rows: list[dict], new_env: bool, unit_arg: str)
             continue
         counts[r["cls"]] += 1
         lines.append(f"MISSING  {r['id']} ({r['kind']}: {r['detail']}) for {r['for']} [{r['if_missing'] if r['optional'] else want}]")
+        la = r.get("last_attempt")
+        if la:
+            lines.append(f"  last attempt {la.get('date', '?')} via {la.get('route') or '?'}: {la.get('result', '?')}"
+                         + (f", took {la['took']}" if la.get("took") else "") + (f" ({la['notes']})" if la.get("notes") else ""))
         if not r["recipes"]:
-            lines.append(f"  no recipe for {env['key']}: find the official install route, tell the user, then record it with")
-            lines.append(f"  evergreen.py setup {unit_arg} --record {r['id']} --env {env['os']} --how \"`<command>`\" [--tags admin] --verified")
+            route = "way to get this access (the resource owner's docs, the team's request process)" if r["kind"] == "access" else "install route"
+            lines.append(f"  no recipe for {env['key']}: find the official {route}, tell the user, then record it with")
+            lines.append(f"  evergreen.py setup {unit_arg} --record {r['id']} --env {'any' if r['kind'] == 'access' else env['os']} --how \"...\" [--tags admin] --verified")
+        if r["kind"] == "access" and "(403)" in r["detail"]:
+            lines.append(f"  access request draft: evergreen.py setup {unit_arg} --request {r['id']}; after sending, --attempt {r['id']} --result pending")
         for rc in r["recipes"][:4]:
             tag = []
             if rc["verified"]:
@@ -472,6 +626,8 @@ def render(name: str, env: dict, rows: list[dict], new_env: bool, unit_arg: str)
             tag += [t for t in rc["tags"] if t != "unverified"]
             src = "" if rc["source"] == "unit" else f" [{rc['source']} book]"
             lines.append(f"  {rc['cls']:<4} {rc['key']}: {rc['how']}" + (f" ({', '.join(tag)})" if tag else "") + src)
+            for k, step in enumerate(rc.get("steps", [])[:10], 1):
+                lines.append(f"         {k}. {step}")
     if len(lines) == 1 + (1 if ok else 0) and not any(counts.values()):
         lines.append("all needs present")
     else:
@@ -496,6 +652,8 @@ def write_script(path: Path, env: dict, rows: list[dict], unit_arg: str) -> Path
         out.append(f"# {r['id']} ({r['kind']}): {r['for']}")
         if not rc["commands"]:
             out.append(f"# NEEDS YOU: {rc['how']}")
+        for k, step in enumerate(rc.get("steps", []), 1):
+            out.append(f"#   {k}. {step}")
         for c in rc["commands"]:
             user = rc["cls"] == "user" or r["kind"] == "env"
             out.append(("# NEEDS YOU (" + ", ".join(t for t in rc["tags"] if t in USER_TAGS) + "): " if user else "") + c)
@@ -505,6 +663,31 @@ def write_script(path: Path, env: dict, rows: list[dict], unit_arg: str) -> Path
     path.parent.mkdir(parents=True, exist_ok=True)
     eg.write_lf(path, "\n".join(out) + "\n")
     return path
+
+
+REQUEST_TEMPLATE = """Subject: read access request: {id}
+
+Hello <the resource owner or admin>,
+
+Could I have read-only access for the following? It is for {for_}.
+
+- Who: <your account or the identity that will use it>
+- Resource: <the exact resource: server and database, the Application Insights or Log Analytics resource, the repository>
+- Role: <the narrowest read role{role_hint}>
+- Scope: <that resource, or its resource group; not the whole subscription or server>
+- Duration: <permanent, until a date, or eligible through PIM / just-in-time activation>
+- How I will check it works: a read-only call ({probe})
+
+Thank you."""
+
+
+def request_draft(n: dict, recipes: list[dict]) -> str:
+    lines = [s for r in recipes for s in [r["how"], *r.get("steps", [])]]
+    hint = next((s for s in lines if re.search(r"\b(?:[A-Z][\w-]* )*(?:Reader|Viewer|Contributor|Read(?:Only)?)\b", s)), "") or \
+        next((s for s in lines if re.search(r"read role|role|grant|scope", s, re.I)), "")  # a named role first
+    return REQUEST_TEMPLATE.format(id=n["id"], for_=n["for"] or "<what the skill needs it for>",
+                                   role_hint=f"; the recipe says: {hint}" if hint else "",
+                                   probe=f"`{n['check']}`" if n["check"] else "the skill's own check")
 
 
 # ---------- command ----------
@@ -535,6 +718,22 @@ def cmd_setup(a):
     d, st = eg.load_state(a.unit)
     name = st.get("name", d.name)
     p = unit_setup(d, st)
+    if a.attempt:
+        if a.result not in RESULTS:
+            print(f"usage: --attempt needs --result {'|'.join(RESULTS)}", file=sys.stderr)
+            raise SystemExit(2)
+        print(f"{a.attempt} · {a.result}: " + log_attempt(d, st, env, a.attempt, a.result, a.route or "", a.took or "", a.note or ""))
+        return
+    if a.request:
+        if not p.exists():
+            raise SystemExit(f"no {p.name}")
+        need = next((n for n in parse_needs(p.read_text(encoding="utf-8", errors="replace")) if n["id"] == a.request), None)
+        if not need:
+            print(f"usage: no need '{a.request}' in {p.name}", file=sys.stderr)
+            raise SystemExit(2)
+        print(request_draft(need, recipes_for(need["id"], load_books(d), env)))
+        print(f"\n(fill the <...> parts with the user; after sending: --attempt {need['id']} --result pending --route <key> --note \"request sent to ...\")")
+        return
     if a.init:
         if p.exists():
             print(f"exists: {p}")
@@ -553,7 +752,7 @@ def cmd_setup(a):
         print(f"setup {name}: no {p.name} (nothing declared). `--init` writes one from the template.")
         return
     needs = parse_needs(p.read_text(encoding="utf-8", errors="replace"))
-    rows = run_checks(d, needs, env)
+    rows = run_checks(d, needs, env, a.skip_access)
     new_env = env["key"] not in envs_met(st)
     missing = [r["id"] for r in rows if r["status"] == "missing"]
     if a.json:
@@ -578,7 +777,7 @@ def add_parsers(sp, common):
     s.add_argument("--json", action="store_true")
     s.add_argument("--script", metavar="PATH", help="write a reviewable install script for the missing needs (.ps1 on Windows, .sh elsewhere)")
     s.add_argument("--log", action="store_true", help="record this environment and what is missing in SETUP.md and evergreen.json")
-    s.add_argument("--note", help="with --log: a short note for the Environments met row")
+    s.add_argument("--note", help="with --log or --attempt: a short note for the row")
     s.add_argument("--init", action="store_true", help="write SETUP.md from the template and add it to the unit's files map")
     s.add_argument("--record", metavar="ID", help="add or replace the recipe for this need under --env")
     s.add_argument("--env", metavar="KEY", help="with --record: windows, macos, linux, wsl, a harness, a package manager, a/b, or any")
@@ -586,4 +785,10 @@ def add_parsers(sp, common):
     s.add_argument("--tags", help="with --record: comma list of admin, manual, large, secret, paid")
     s.add_argument("--verified", action="store_true", help="with --record: it just worked here; stamps today and this environment")
     s.add_argument("--to", choices=("unit", "store", "plugin"), default="unit", help="with --record: which book (default: the unit's SETUP.md)")
+    s.add_argument("--attempt", metavar="ID", help="log how getting this need went, in the Attempts table")
+    s.add_argument("--result", help="with --attempt: " + ", ".join(RESULTS))
+    s.add_argument("--route", metavar="KEY", help="with --attempt: the recipe key that was followed; granted or done stamps it verified")
+    s.add_argument("--took", help="with --attempt: how long it took, e.g. '10 min' or '2 days (ticket)'")
+    s.add_argument("--skip-access", action="store_true", help="do not run the read-only access probes")
+    s.add_argument("--request", metavar="ID", help="print a least-privilege access request draft for this need, to fill in with the user and send")
     s.set_defaults(fn=cmd_setup)
