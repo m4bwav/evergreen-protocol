@@ -1933,7 +1933,7 @@ class Setup(unittest.TestCase):
         _, st = eg.load_state(self.d)
         self.assertEqual(st["setup"]["envs"], ["linux/codex"])
         self.assertRegex((self.d / "SETUP.md").read_text(encoding="utf-8"), r"\| linux \| codex \| nosuch, key, model \|")
-        self.assertEqual(sorted(eg.check_links(self.d, st)), ["SETUP.md does not link to SKILL.md", "SKILL.md does not link to SETUP.md"])
+        self.assertEqual(eg.check_links(self.d, st), ["SETUP.md does not link to SKILL.md"])  # the scaffolded Step 0 names SETUP.md
 
     def test_script_comments_out_what_needs_the_user(self):
         lin = self.env("linux", managers=("apt",))
