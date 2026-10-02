@@ -1793,5 +1793,186 @@ class WorthUseful(unittest.TestCase):
         dead = {"delta": 0.0, "margin": 0.33, "cost_ratio": 1.4, "pass_with": 0, "pass_without": 0}
         self.assertEqual(ew.failure_modes({}, None, dead), [])
 
+
+import evergreen_setup as esu  # noqa: E402
+
+SETUP_FIXTURE = """# Setup: s
+
+## Needs
+
+| id | kind | check | for | if missing |
+|---|---|---|---|---|
+| <id> | command | `<tool> --version` | placeholder row | required |
+| py | command | `python \\| python3 >= 3.0` | the scripts | required |
+| nosuch | command | `evergreen-no-such-tool-xyz --version` | cutting clips in Step 3 | required |
+| key | env | `EVERGREEN_TEST_SECRET_XYZ` | captions | optional: Step 4 skips captions |
+| model | file | `~/evergreen-no-such-dir-xyz/*.bin` | a model | optional: smaller model |
+| gh-mcp | mcp | `github` | opening issues | required |
+
+## Install
+
+### nosuch
+
+- any: download from https://example.invalid/nosuch (manual)
+- windows: `winget install --id No.Such -e`
+- macos: `brew install nosuch`
+- linux/apt: `sudo apt-get install -y nosuch` (admin)
+
+### key
+
+- any: `setx EVERGREEN_TEST_SECRET_XYZ value` (secret)
+
+## Environments met
+
+| date | os | harness | missing | notes |
+|---|---|---|---|---|
+"""
+
+
+def setup_args(**kw):
+    import argparse
+    base = dict(unit=None, harness=None, os=None, json=False, script=None, log=False, note=None, init=False, record=None,
+                env=None, how=None, tags=None, verified=False, to="unit", strict=False)
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+class Setup(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["EVERGREEN_HOME"] = str(Path(self.tmp.name) / "home")
+        self.d = Path(self.tmp.name) / "s"
+        eg.main(["init", str(self.d), "--name", "s", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        (self.d / "SETUP.md").write_bytes(SETUP_FIXTURE.encode("utf-8"))
+        _, st = eg.load_state(self.d)
+        st.setdefault("files", {})["setup"] = "SETUP.md"
+        eg.save_state(self.d, st)
+
+    def tearDown(self):
+        os.environ.pop("EVERGREEN_HOME", None)
+        os.environ.pop("EVERGREEN_TEST_SECRET_XYZ", None)
+        self.tmp.cleanup()
+
+    def env(self, os_key="windows", harness="claude-code", managers=()):
+        return {"os": os_key, "extra": [], "harness": harness, "managers": list(managers), "key": f"{os_key}/{harness}",
+                "facets": {os_key, harness, *managers}}
+
+    def rows(self, env):
+        return {r["id"]: r for r in esu.run_checks(self.d, esu.parse_needs(SETUP_FIXTURE), env)}
+
+    def test_parse_needs_skips_placeholders_and_reads_optional(self):
+        needs = esu.parse_needs(SETUP_FIXTURE)
+        self.assertEqual([n["id"] for n in needs], ["py", "nosuch", "key", "model", "gh-mcp"])
+        self.assertEqual(needs[0]["check"], "python | python3 >= 3.0")
+        self.assertTrue(needs[2]["optional"])
+        self.assertFalse(needs[1]["optional"])
+
+    def test_checks_never_print_secrets_and_agent_kinds_are_handed_back(self):
+        os.environ["EVERGREEN_TEST_SECRET_XYZ"] = "hunter2-value"
+        rows = self.rows(self.env())
+        self.assertEqual(rows["py"]["status"], "ok")
+        self.assertEqual(rows["nosuch"]["status"], "missing")
+        self.assertEqual(rows["key"]["status"], "ok")
+        self.assertNotIn("hunter2", json.dumps(rows))
+        self.assertEqual(rows["model"]["status"], "missing")
+        self.assertEqual(rows["gh-mcp"]["status"], "agent")
+
+    def test_recipes_match_most_specific_first_and_classify(self):
+        books = esu.load_books(self.d)
+        win = esu.recipes_for("nosuch", books, self.env("windows"))
+        self.assertEqual([r["key"] for r in win], ["windows", "any"])
+        self.assertEqual(esu.classify(win[0]), "self")
+        self.assertEqual(esu.classify(win[1]), "user")  # prose only, and tagged manual
+        lin = esu.recipes_for("nosuch", books, self.env("linux", managers=("apt",)))
+        self.assertEqual([r["key"] for r in lin], ["linux/apt", "any"])
+        self.assertEqual(esu.classify(lin[0]), "user")  # admin
+        self.assertEqual([r["key"] for r in esu.recipes_for("nosuch", books, self.env("linux"))], ["any"])
+        rows = self.rows(self.env())
+        self.assertEqual(rows["model"]["cls"], "none")
+        self.assertEqual(rows["nosuch"]["cls"], "self")
+        os.environ.pop("EVERGREEN_TEST_SECRET_XYZ", None)
+        self.assertEqual(self.rows(self.env())["key"]["cls"], "user")  # an env var is the user's, whatever the recipe
+
+    def test_plugin_book_is_the_fallback(self):
+        rs = esu.recipes_for("git", esu.load_books(self.d), self.env("windows", managers=("winget",)))
+        self.assertTrue(rs and rs[0]["source"] == "plugin" and "Git.Git" in rs[0]["commands"][0])
+
+    def test_record_is_a_delta_edit_and_replaces_by_key(self):
+        before = (self.d / "SETUP.md").read_text(encoding="utf-8")
+        capture(["setup", str(self.d), "--record", "nosuch", "--env", "windows/codex", "--how", "`scoop install nosuch`",
+                 "--verified", "--os", "windows", "--harness", "codex"])
+        self.assertIn("(verified ", (self.d / "SETUP.md").read_text(encoding="utf-8"))
+        capture(["setup", str(self.d), "--record", "nosuch", "--env", "windows/codex", "--how", "`scoop install nosuch2`"])
+        capture(["setup", str(self.d), "--record", "brandnew", "--env", "any", "--how", "`pip install brandnew==1.2`"])
+        after = (self.d / "SETUP.md").read_bytes().decode("utf-8")
+        self.assertEqual(after.count("windows/codex:"), 1)
+        self.assertIn("- windows/codex: `scoop install nosuch2`", after)
+        self.assertIn("### brandnew", after)
+        self.assertLess(after.index("### brandnew"), after.index("## Environments met"))
+        for line in before.splitlines():
+            self.assertIn(line, after)
+        self.assertNotIn("\r", after)
+        rs = esu.recipes_for("nosuch", esu.load_books(self.d), self.env("windows", "codex"))
+        self.assertEqual(rs[0]["key"], "windows/codex")
+
+    def test_record_refuses_private_paths_in_the_public_book(self):
+        with self.assertRaises(SystemExit) as cm, contextlib.redirect_stderr(io.StringIO()):
+            esu.cmd_setup(setup_args(unit="x", record="t", env="any", how="`run /home/someone/x`", to="plugin"))
+        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(esu.scrub(f"`{Path.home()}/bin/x`")[0], "`~/bin/x`")
+
+    def test_log_records_the_environment_and_check_exits_1_on_a_required_miss(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+            eg.main(["setup", str(self.d), "--log", "--os", "linux", "--harness", "codex"])
+        self.assertEqual(cm.exception.code, 1)
+        text = out.getvalue()
+        self.assertIn("new environment", text)
+        self.assertIn("MISSING  nosuch", text)
+        self.assertIn("no recipe for linux/codex", text)
+        _, st = eg.load_state(self.d)
+        self.assertEqual(st["setup"]["envs"], ["linux/codex"])
+        self.assertRegex((self.d / "SETUP.md").read_text(encoding="utf-8"), r"\| linux \| codex \| nosuch, key, model \|")
+        self.assertEqual(sorted(eg.check_links(self.d, st)), ["SETUP.md does not link to SKILL.md", "SKILL.md does not link to SETUP.md"])
+
+    def test_script_comments_out_what_needs_the_user(self):
+        lin = self.env("linux", managers=("apt",))
+        path = esu.write_script(Path(self.tmp.name) / "install", lin, esu.run_checks(self.d, esu.parse_needs(SETUP_FIXTURE), lin), "s")
+        self.assertEqual(path.suffix, ".sh")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("# NEEDS YOU (admin): sudo apt-get install -y nosuch", text)
+        self.assertIn("# model: no recipe", text)
+        win = self.env("windows")
+        wpath = esu.write_script(Path(self.tmp.name) / "install", win, esu.run_checks(self.d, esu.parse_needs(SETUP_FIXTURE), win), "s")
+        self.assertEqual(wpath.suffix, ".ps1")
+        self.assertIn("\nwinget install --id No.Such -e\n", wpath.read_text(encoding="utf-8"))
+
+    def test_init_adds_the_file_and_the_template_parses_clean(self):
+        d = Path(self.tmp.name) / "fresh"
+        eg.main(["init", str(d), "--name", "fresh", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        capture(["setup", str(d), "--init"])
+        _, st = eg.load_state(d)
+        self.assertEqual(st["files"]["setup"], "SETUP.md")
+        self.assertEqual(esu.parse_needs((d / "SETUP.md").read_text(encoding="utf-8")), [])
+        self.assertIn("all needs present", capture(["setup", str(d)]))
+
+    def test_harness_detection(self):
+        cases = [({"AI_AGENT": "claude-code_2-1-287_agent", "CLAUDECODE": "1"}, "claude-code"),
+                 ({"CLAUDE_CODE_IS_COWORK": "1", "CLAUDECODE": "1", "AI_AGENT": "claude-code_2-1-287_agent"}, "cowork"),
+                 ({"AI_AGENT": "github_copilot_vscode_agent"}, "copilot"), ({"AI_AGENT": "devin@1"}, "devin"),
+                 ({"AI_AGENT": "1"}, "agent"), ({"AI_AGENT": "0", "GEMINI_CLI": "1"}, "gemini-cli"),
+                 ({"AGENT": "goose"}, "goose"), ({"CODEX_SANDBOX": "seatbelt"}, "codex"), ({"CLAUDECODE": "1"}, "claude-code"),
+                 ({"CURSOR_TRACE_ID": "x"}, "unknown"), ({"EVERGREEN_HARNESS": "Aider", "CLAUDECODE": "1"}, "aider"), ({}, "unknown")]
+        for environ, want in cases:
+            self.assertEqual(esu.detect_harness(environ), want, environ)
+
+    def test_shared_book_names_nothing_private(self):
+        text = (eg.plugin_root() / "setup" / "RECIPES.md").read_text(encoding="utf-8")
+        self.assertIsNone(esu.PRIVATE_RE.search(text))
+        book = esu.parse_recipes(text, "plugin")
+        for tool in ("python", "git", "gh", "node", "ffmpeg", "ollama", "uv", "claude"):
+            self.assertTrue(book.get(tool), tool)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

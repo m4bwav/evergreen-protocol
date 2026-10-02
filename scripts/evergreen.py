@@ -29,6 +29,9 @@ Commands
   worth   <skill|plugin|folder> [--against REV] [--results P ...] [--record] [--json]
                                     is a skill worth its tokens? static signals + the with/without A/B (evergreen_worth.py)
   worth-hook                        PostToolUse hook body (stdin JSON): warn once when an edited SKILL.md reads as mostly cost
+  setup   <unit> [--harness H] [--json] [--script PATH] [--log] [--init]
+          <unit> --record ID --env KEY --how TEXT [--tags admin,large] [--verified] [--to unit|store|plugin]
+                                    what a unit needs here: checks, install recipes per environment, what worked (evergreen_setup.py)
   use-log                           PostToolUse hook body (stdin JSON): append a Skill use to EVERGREEN_HOME/uses.jsonl
   uses    [--skill NAME] [--days 7] [--limit 20] [--json]   recent skill uses, newest first
   map-slug <repo>                   slug for a repo path
@@ -101,6 +104,7 @@ TEST_FILES = {"TESTS.md": "TESTS.md.template", "evals/evals.json": "evals.json.t
 FAILURE_CLASSES = ("undertrigger", "overtrigger", "no-op", "fallback", "wrong-outcome", "environment", "harness")
 RESEARCH_FIRST_CLASSES = ("no-op", "fallback")  # a failure of these classes sends the agent to research before tuning
 SEARCH_TRACKS = ("subject", "tooling", "practice", "testing")
+SATELLITES = ("setup",)  # companions that link only the main file, both ways (check_links)
 
 
 # ---------- paths and io ----------
@@ -895,6 +899,8 @@ def check_links(d: Path, st: dict) -> list[str]:
         for other, oname in names.items():
             if other == k or other not in texts:
                 continue
+            if (k in SATELLITES or other in SATELLITES) and "main" not in (k, other):
+                continue  # a satellite links the main file both ways, not every log (SETUP.md, protocol/SETUP.md)
             if oname not in txt:
                 problems.append(f"{names[k]} does not link to {oname}")
     if "main" in texts and "evergreen" not in texts["main"].lower():
@@ -2277,6 +2283,11 @@ def main(argv=None):
         ew.add_parsers(sp, common)  # worth, worth-hook
     except Exception as e:  # optional like the sync module
         print(f"[evergreen] worth commands unavailable: {e}", file=sys.stderr)
+    try:
+        import evergreen_setup as esu
+        esu.add_parsers(sp, common)  # setup
+    except Exception as e:  # optional like the sync module
+        print(f"[evergreen] setup command unavailable: {e}", file=sys.stderr)
 
     a = p.parse_args(argv)
     if not a.cmd:

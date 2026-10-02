@@ -40,6 +40,8 @@ No shell reaching the folder? Copy the templates from `<plugin root>/templates/`
 
 While converting, note anything platform-bound in the skill's scripts or instructions (backslash paths, `%USERPROFILE%`, PowerShell-only steps, CRLF in a `.sh`) and either fix it or record it as a learning; the protocol prefers cross-platform compatibility wherever it is not onerous (PROTOCOL.md §8).
 
+A skill that calls anything outside itself (an executable, an import, an environment variable, a URL, a model, an MCP server) gets a `SETUP.md` too: `EG setup <unit> --init`, then the Needs table from what Step 1 found, linked from the main file (PROTOCOL.md §12).
+
 ## Step 3: fill, do not stub
 
 - RESEARCH.md: write Current understanding from what the main file already asserts; put the time-sensitive claims into the Search plan's subject track as concrete queries and fill in the tooling, practice and testing tracks from the template with `<topic>` replaced; list best primary sources; add an `R-` entry summarizing the research basis of the current content, plus one for what the tooling pass found (or did not find) (even if that basis is "written from model knowledge on <date>", say so; that is exactly what the first refresh should check).

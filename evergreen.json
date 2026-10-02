@@ -7,7 +7,8 @@
     "research": "RESEARCH.md",
     "changelog": "CHANGELOG.md",
     "learnings": "LEARNINGS.md",
-    "tests": "TESTS.md"
+    "tests": "TESTS.md",
+    "setup": "SETUP.md"
   },
   "protocol": "protocol/PROTOCOL.md",
   "source": null,
@@ -107,5 +108,11 @@
     "failing": [],
     "last_failure": null,
     "research_after_days": null
+  },
+  "setup": {
+    "envs": [
+      "windows/claude-code"
+    ],
+    "last_check": "2026-10-02"
   }
 }
