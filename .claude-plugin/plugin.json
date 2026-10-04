@@ -33,5 +33,8 @@
     "./agents/evergreen-tester.md"
   ],
   "homepage": "https://github.com/m4bwav/evergreen-protocol",
+  "documentationUrl": "https://github.com/m4bwav/evergreen-protocol#readme",
+  "supportUrl": "https://github.com/m4bwav/evergreen-protocol/issues",
+  "privacyPolicyUrl": "https://github.com/m4bwav/evergreen-protocol#privacy",
   "repository": "https://github.com/m4bwav/evergreen-protocol"
 }

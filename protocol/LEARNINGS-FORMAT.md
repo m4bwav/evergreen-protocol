@@ -8,7 +8,7 @@ Part of the [Evergreen Protocol](PROTOCOL.md). A learning is a procedural lesson
 ### L-012 · 2026-08-23 · Copilot CLI hangs on tool approval when run non-interactively
 - Trigger: `copilot -p` delegation hung twice (08-20, 08-23) waiting for a tool prompt nobody could answer
 - Hypothesis: non-interactive runs still gate tool calls behind an interactive approval unless told otherwise
-- Rule: pass `--allow-all-tools` on every non-interactive `copilot -p` call; if it still hangs, stop delegating that task
+- Rule: add `--allow-all-tools` on every non-interactive `copilot -p` call; if it still hangs, stop delegating that task
 - Evidence: C-20260823-2 (SKILL.md §Delegation rules), confirmed 2026-08-29
 - Scope: env:work-pc
 - Status: active · helpful 3 · harmful 0 · last_confirmed 2026-08-29
@@ -55,7 +55,7 @@ Where the counters come from: ACE tags each bullet helpful or harmful, but only 
 
 ## Budgets and consolidation
 
-Active entries under 200 lines. When the active entries pass `consolidate_every` (default 25) or the budget is exceeded, run a consolidation pass (the session-start audit and `evergreen.py status` flag it as `consolidate:N>M`): read every active entry, merge near-duplicates, retire the dead, promote the proven, tighten wording. Edit entries individually. Log the pass as one `C-` entry listing the IDs touched.
+Active entries under 200 lines. When the active entries exceed `consolidate_every` (default 25) or the budget is exceeded, run a consolidation pass (the session-start audit and `evergreen.py status` flag it as `consolidate:N>M`): read every active entry, merge near-duplicates, retire the dead, promote the proven, tighten wording. Edit entries individually. Log the pass as one `C-` entry listing the IDs touched.
 
 ## File header
 

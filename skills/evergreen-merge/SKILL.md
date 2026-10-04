@@ -19,7 +19,7 @@ Plugin root: two levels above this file (`${CLAUDE_SKILL_DIR}/../..` in Claude C
 
 ## Email bundles (the fallback route)
 
-Run the merge with the trunk clone's own script so `--trunk` defaults correctly; from another copy, pass `--trunk <trunk path>`.
+Run the merge with the trunk clone's own script so `--trunk` defaults correctly; from another copy, add `--trunk <trunk path>`.
 
 ## Step 0: freshness of this plugin (every use, one read)
 

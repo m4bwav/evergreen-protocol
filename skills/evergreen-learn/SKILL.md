@@ -61,7 +61,7 @@ One line to the user: what was recorded and where. No lecture.
 
 - Promote after three confirmations or when clearly general: compress into the main file where it will be read at the right moment, log a `C-`, mark the entry `promoted: C-...`.
 - Retire when `harmful` > `helpful`, a refresh contradicts it, or its scope is gone. Archive with reason; never silently delete.
-- Consolidate when active entries pass `consolidate_every` (25) or 200 lines (the session-start audit flags it as `consolidate:N>M`), or when asked: merge near-duplicates, retire the dead, promote the proven, tighten wording. Entry by entry, never a regeneration. One `C-` listing the IDs touched.
+- Consolidate when active entries exceed `consolidate_every` (25) or 200 lines (the session-start audit flags it as `consolidate:N>M`), or when asked: merge near-duplicates, retire the dead, promote the proven, tighten wording. Entry by entry, never a regeneration. One `C-` listing the IDs touched.
 
 ## End-of-task reflection
 
