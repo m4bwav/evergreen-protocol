@@ -155,7 +155,36 @@ This repository is the official version. Every install is a clone of it and keep
 
 Email is the fallback for a machine that cannot reach the repository (`update.transport: "email"`, or `EVERGREEN_UPDATE_TRANSPORT=email`): `notify` builds an update bundle and emails it to `notify.to` through classic Outlook, Microsoft Graph or Gmail SMTP, or leaves it in `EVERGREEN_HOME/outbox/` for an agent; at the trunk, `evergreen.py merge` folds the bundle, patch or saved email in (entry union with ID renumbering, `evergreen.json` as data, git 3-way for the rest; never `evergreen.config.json`, code only with `--allow-code`). Details in `skills/evergreen-notify` and `skills/evergreen-merge`.
 
-The repository holds `evergreen.config.json` (store paths, the owner's address) and `profile/` (the owner's preferences and environment facts). Keep it private; give other people read access or a fork, or hand them a `pack --share` archive, which carries neither.
+In this public repository `evergreen.config.json` carries a placeholder address and `profile/` is an empty template. A private fork is where a real address and a filled-in profile belong; a `pack --share` archive carries neither.
+
+## Hooks, git and files outside the project
+
+The plugin's hooks run only in Claude Code and Cowork; other agent products get the skills alone. Each hook runs `scripts/evergreen-hook.sh`, which looks for a working Python (`py -3`, `python` or `python3`) and runs `scripts/evergreen.py`. It never stops a session: on any error it exits with no output.
+
+- SessionStart runs `audit --brief`. It reads the evergreen units on this machine and prints the ones due for a refresh, a claim check or a consolidation. It makes no network call and prints nothing when nothing is due.
+- PostToolUse on the `Skill` tool appends one line (time, skill name, session id, transcript path, working folder, machine name) to `uses.jsonl` in the evergreen home folder. It prints nothing and sends nothing.
+- PostToolUse on `Write`, `Edit` and `MultiEdit` returns at once unless the file is a `SKILL.md`. For a `SKILL.md` it runs the static worth reading, which is local, and may give the model a one-line warning.
+- SessionEnd starts a detached `notify --if-changed`, which does nothing unless this install answered yes to `contribute`. With that yes and the default git route, it commits the plugin's own changed files in the plugin's clone and pushes them: to `master` of the trunk repository when this clone may write there (a maintainer's), otherwise to a new `update/<machine>-<time>` branch with a draft pull request opened by `gh pr create` against m4bwav/evergreen-protocol. It finds out which by a dry-run push. With the email route instead (`update.transport: "email"`), it emails an update bundle to the address in `evergreen.config.json`, The shipped config has a placeholder address and `notify.auto` off, so the hook sends no email until you set both.
+
+The same publish runs when you or the agent run `publish`, `notify`, `checked`, `bump` or `tested` on the plugin itself. `pull` fetches the trunk and fast-forwards the clone. `evergreen-merge` merges pull requests on the trunk with `gh` and pulls. Nothing is ever force-pushed.
+
+Files written outside the project: the evergreen home folder (`~/.evergreen` by default; `evergreen.config.json` or `EVERGREEN_HOME` moves it), which holds the registry, the `contribute` answer, codemaps, baselines, the use log, the email outbox and the local book of install recipes; and the evergreen files (RESEARCH, CHANGELOG, LEARNINGS, TESTS, `evergreen.json`, evals) of each skill or doc you make evergreen, wherever that unit lives. Update bundles for the email route go to the outbox. `pack` writes zip and `.plugin` archives only when asked.
+
+## Privacy
+
+Everything runs on your machine. The scripts are Python standard library only, with no analytics and no telemetry. They read and write markdown and JSON in the evergreen home folder, in the plugin's clone and in the units you register.
+
+Data leaves your machine by these routes only:
+
+- GitHub, through your own `git` and `gh`: pulls from the trunk repository, and, only after you answer yes to `contribute`, pushes and pull requests carrying the plugin's file diffs (never transcripts). Branch names, commit messages and pull request text carry the machine's name (its host name, or `EVERGREEN_ENV`). Setting `DO_NOT_TRACK` or `CI` turns contribution off.
+- Email, only if you switch the update route to email and set a recipient: through classic Outlook on Windows (its COM interface), Microsoft Graph (the Graph PowerShell module's own sign-in, with the `Mail.Send` scope), or SMTP (Gmail's server by default) with the user name and app password you put in `EVERGREEN_SMTP_USER` and `EVERGREEN_SMTP_PASS` or in a password file. The `compose-url` transport, when you choose it, opens a Gmail compose window in your browser for you to send by hand.
+- Web research: when a unit is refreshed, the agent reads public web pages with its own web search and fetch tools. The scripts fetch nothing for this.
+- Set-up checks (`evergreen.py setup`), only when run: a GET request to each URL a unit's `SETUP.md` names, a request to your Ollama server (`OLLAMA_HOST`, `localhost:11434` by default), and the read-only access probes the unit's `SETUP.md` names, run in your shell with your own sign-ins. A probe's output is not kept; one redacted error line is.
+- Paid model runs (`worth --probe`, `--ab`, `--heavy`), only when asked: they run the `claude` command line with your Claude sign-in, or with `ANTHROPIC_API_KEY` for `--blind`, and cost model usage.
+
+What is kept: everything above stays in the evergreen home folder, the plugin's clone and the unit folders. `worth --triage` reads your Claude Code transcripts on this machine to count real skill use; it sends nothing. Nothing goes to the plugin's author except a contribution you agreed to.
+
+Credentials: evergreen stores none of its own. Git and GitHub use the login `git` and `gh` already have. The SMTP route reads an app password that you create and put in an environment variable or a file; an agent never writes it. The Graph route checks that the Graph module's token cache exists and leaves the token to that module. The environment variables it reads are its own settings (`EVERGREEN_HOME`, `EVERGREEN_ENV`, `EVERGREEN_CONTRIBUTE`, `EVERGREEN_GIT_ROLE`, `EVERGREEN_UPDATE_TRANSPORT`, `EVERGREEN_NOTIFY_TRANSPORTS`, `EVERGREEN_PLUGIN`, the three `EVERGREEN_SMTP_` variables), `DO_NOT_TRACK`, `CI`, `OLLAMA_HOST`, `CLAUDE_BIN`, `CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY` (checked for `--blind` only), and standard system variables (`PATH`, `TEMP`, `TMP`, `LOCALAPPDATA`, `WSL_DISTRO_NAME`). `setup` also checks whether variables a unit needs are set, without printing their values.
 
 ## License
 

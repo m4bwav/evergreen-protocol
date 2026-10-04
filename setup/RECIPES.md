@@ -44,21 +44,21 @@ This book is public. A recipe here names no person, host, drive or private path,
 
 - windows: `winget install --id Ollama.Ollama -e`
 - macos: download the app from https://ollama.com/download (manual)
-- linux: `curl -fsSL https://ollama.com/install.sh | sh` (admin)
+- linux: `curl -fsSL -o ollama-install.sh https://ollama.com/install.sh` then `sh ollama-install.sh` (admin)
 - any: a model is a second step: `ollama pull <model>`; say its size first, models run to several gigabytes (large)
 
 ### uv
 
 - windows: `winget install --id astral-sh.uv -e`
 - brew: `brew install uv`
-- linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- linux: `curl -LsSf -o uv-install.sh https://astral.sh/uv/install.sh` then `sh uv-install.sh`
 - pipx: `pipx install uv`
 
 ### claude
 
-- windows: `powershell -ExecutionPolicy ByPass -c "irm https://claude.ai/install.ps1 | iex"`
-- macos: `curl -fsSL https://claude.ai/install.sh | bash`
-- linux: `curl -fsSL https://claude.ai/install.sh | bash`
+- windows: `powershell -c "irm https://claude.ai/install.ps1 -OutFile claude-install.ps1"` then `powershell -ExecutionPolicy Bypass -File claude-install.ps1`
+- macos: `curl -fsSL -o claude-install.sh https://claude.ai/install.sh` then `bash claude-install.sh`
+- linux: `curl -fsSL -o claude-install.sh https://claude.ai/install.sh` then `bash claude-install.sh`
 - npm: `npm install -g @anthropic-ai/claude-code`
 - any: then run `claude` once and sign in (manual)
 
