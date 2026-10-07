@@ -45,4 +45,4 @@ Repo gotchas ("touching X silently breaks Y", flaky tests, surprising defaults) 
 
 ## Maintenance
 
-Maps are tier `code` units: due on the calendar (30 days by default, 7 to 90) or on drift (30 commits or 20% of files), whichever first; they never migrate tiers. This skill shares the plugin's unit: `evergreen.json` at the plugin root, [RESEARCH.md](../../RESEARCH.md), [CHANGELOG.md](../../CHANGELOG.md), [LEARNINGS.md](../../LEARNINGS.md), [TESTS.md](../../TESTS.md).
+Maps are tier `code` units: due on the calendar (30 days by default, 7 to 90) or on drift (30 commits or 20% of files), whichever first; they never migrate tiers. This skill shares the plugin's unit: `evergreen.json` at the plugin root, [RESEARCH.md](https://github.com/m4bwav/evergreen-protocol/blob/master/RESEARCH.md), [CHANGELOG.md](https://github.com/m4bwav/evergreen-protocol/blob/master/CHANGELOG.md), [LEARNINGS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/LEARNINGS.md), [TESTS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/TESTS.md).
