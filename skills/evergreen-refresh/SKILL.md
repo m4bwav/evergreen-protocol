@@ -64,4 +64,4 @@ A refresh that goes wrong is itself a signal. Searches that keep returning noise
 
 ## Maintenance
 
-This skill is evergreen (topic: research-refresh practice for agent knowledge; tier `fast`). Its state and companions live at the plugin root: `evergreen.json`, [RESEARCH.md](../../RESEARCH.md), [CHANGELOG.md](../../CHANGELOG.md), [LEARNINGS.md](../../LEARNINGS.md), [TESTS.md](../../TESTS.md). The plugin is one unit; all its skills share it.
+This skill is evergreen (topic: research-refresh practice for agent knowledge; tier `fast`). Its state and companions live at the plugin root: `evergreen.json`, [RESEARCH.md](https://github.com/m4bwav/evergreen-protocol/blob/master/RESEARCH.md), [CHANGELOG.md](https://github.com/m4bwav/evergreen-protocol/blob/master/CHANGELOG.md), [LEARNINGS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/LEARNINGS.md), [TESTS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/TESTS.md). The plugin is one unit; all its skills share it.

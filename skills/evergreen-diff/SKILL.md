@@ -52,4 +52,4 @@ A baseline that was wrong, a file the diff should ignore, a noisy state delta: r
 
 ## Maintenance
 
-This skill shares the plugin's unit: `evergreen.json` at the plugin root, [RESEARCH.md](../../RESEARCH.md), [CHANGELOG.md](../../CHANGELOG.md), [LEARNINGS.md](../../LEARNINGS.md), [TESTS.md](../../TESTS.md).
+This skill shares the plugin's unit: `evergreen.json` at the plugin root, [RESEARCH.md](https://github.com/m4bwav/evergreen-protocol/blob/master/RESEARCH.md), [CHANGELOG.md](https://github.com/m4bwav/evergreen-protocol/blob/master/CHANGELOG.md), [LEARNINGS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/LEARNINGS.md), [TESTS.md](https://github.com/m4bwav/evergreen-protocol/blob/master/TESTS.md).

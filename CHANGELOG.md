@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261006-1 · 2026-10-06 · Version 0.15.1: ready for GitHub Copilot CLI and awesome-copilot (root plugin.json; skills link the unit files in the public repository)
+- because: user request (list evergreen in awesome-copilot; `vally lint` rejects SKILL.md links that leave the skill folder, and the intake reads only a root or `.github/plugin/` manifest; the maintainer chose links to the public repository over copies)
+- files: plugin.json (new, Agent Plugins 1.0, 10 of the 18 keywords), .claude-plugin/plugin.json (0.15.1), skills/*/SKILL.md (Maintenance: the shared-unit line)
+- The fifteen skills' links to `../../RESEARCH.md`, `CHANGELOG.md`, `LEARNINGS.md` and `TESTS.md` now point to those files on github.com/m4bwav/evergreen-protocol (master). The sentence still says they sit at the plugin root, so an agent with the plugin installed reads the local copy; `evergreen.py lint` still finds each file name.
+
 ### C-20261003-1 · 2026-10-03 · Ready for the Claude plugin directory: README discloses hooks, git, files and data flows; manifest links; pinned launcher text; installers downloaded before they run
 - because: user request (submit evergreen to the Claude plugin directory; claude.com/docs/plugins/pre-submission-checklist, read 2026-10-03)
 - files: README.md (new sections Hooks, git and files outside the project; Privacy; One public trunk, many clones: the closing paragraph now matches the public repository), .claude-plugin/plugin.json (documentationUrl, supportUrl, privacyPolicyUrl), setup/RECIPES.md (ollama, uv and claude: download the install script, then run it), agents/evergreen-researcher.md, protocol/PROTOCOL.md §4 and skills/evergreen-new/SKILL.md (`npx skills@1.7.0`), protocol/TESTING.md (`uvx skillsaw==0.21.0`), protocol/LEARNINGS-FORMAT.md, protocol/SETUP.md, skills/evergreen-learn, evergreen-merge and evergreen-worth SKILL.md (wording)
