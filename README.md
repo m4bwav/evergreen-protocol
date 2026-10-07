@@ -1,5 +1,7 @@
 # Evergreen
 
+![A giant evergreen pine tree whose branches hold glowing scrolls and small tools, a gardener robot gently pruning it, misty forest](https://raw.githubusercontent.com/m4bwav/evergreen-protocol/master/.github/images/banner.jpg)
+
 Self-maintaining, self-proving skills and knowledge for AI agents. An evergreen unit (a skill, a doc, a codemap, a preferences profile) re-researches its topic from primary sources on an adaptive schedule, writes down what it learns so nobody teaches the agent the same thing twice, logs every change with its reason, keeps a map of any codebase it explores, and, for skills, carries the tests that prove it triggers, acts, and gets the result right, with a tuning loop for when it does not. It works in Claude Code, Cowork, and any agent that reads markdown (Copilot, Codex, Cursor, Gemini CLI), because the whole paradigm is plain files plus one small JSON state file. Scripts are conveniences, not requirements.
 
 This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the evidence behind the design, [CHANGELOG.md](CHANGELOG.md) for what changed and why, [LEARNINGS.md](LEARNINGS.md) for lessons, and `evergreen.json` for its schedule (tier `fast`, checked every couple of weeks).
