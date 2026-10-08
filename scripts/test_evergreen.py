@@ -2112,5 +2112,85 @@ class SetupAccess(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
 
 
+import evergreen_wrapup as ewu  # noqa: E402
+
+WRAPUP_FIXTURE = Path(__file__).resolve().parent.parent / "evals" / "fixtures" / "wrapup-session" / "session.jsonl"
+
+
+class Wrapup(unittest.TestCase):
+    def test_repeated_case_flags_add_up(self):
+        import argparse
+        p = argparse.ArgumentParser()
+        p.add_argument("--case", action=ew.CaseGlobs)
+        a = p.parse_args(["--case", "action-5", "--case", "outcome-*"])
+        self.assertEqual(a.case, "action-5|outcome-*")
+        self.assertTrue(ew.case_match("outcome-3", a.case) and ew.case_match("action-5", a.case))
+        self.assertFalse(ew.case_match("action-6", a.case))
+
+    def test_harvest_finds_the_signals_in_the_fixture_session(self):
+        h = ewu.harvest(WRAPUP_FIXTURE)
+        self.assertEqual(len(h["corrections"]), 1)  # not the task, not "Thanks, looks good."
+        self.assertIn(".venv", h["corrections"][0])
+        self.assertEqual(len(h["errors"]), 1)
+        e = h["errors"][0]
+        self.assertEqual((e["tool"], e["count"], e["retried"]), ("Bash", 2, True))
+        self.assertIn("ModuleNotFoundError", e["line"])  # the line naming the error, not the traceback header
+        self.assertIn({"shape": "python deploy.py", "count": 6}, h["repeats"])
+        self.assertIn({"command": ".venv/Scripts/python deploy.py --check", "count": 3}, h["exact_repeats"])
+        self.assertEqual([(s["count"], s["total"]) for s in h["slow"]], [(1, 240)])
+        self.assertEqual(h["tokens"]["turns"], 7)
+        self.assertIn("C1:", ewu.render(h))
+
+    def test_command_shapes_skip_syntax_plumbing_and_inline_code(self):
+        self.assertEqual(ewu.command_shapes("cd /x && python - <<'EOF'\nimport os\nprint(os.sep)\nEOF"), [])
+        self.assertEqual(ewu.command_shapes('python -c "from PIL import Image; Image.open(1)"'), [])
+        self.assertEqual(ewu.command_shapes("for f in a b; do git status; done"), ["git status"])
+        self.assertEqual(ewu.command_shapes("python D:/x/scripts/evergreen.py audit --brief | head -5"), ["python evergreen.py audit"])
+        self.assertEqual(ewu.command_shapes("FOO=1 gh pr view 12 --json url"), ["gh pr view"])
+
+    def test_notes_touched_outside_repositories_are_reported_by_vault_or_folder(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "Cooking"
+            (vault / ".obsidian").mkdir(parents=True)
+            (vault / "recipes").mkdir()
+            repo = vault / "code-repo"
+            (repo / ".git").mkdir(parents=True)
+            loose = root / "Job-Seeking"
+            loose.mkdir()
+            n = ewu.notes_touched({str(vault / "recipes" / "tortilla.md"), str(repo / "README.md"), str(vault / "x.py")},
+                                  {str(loose / "leads.md"), str(vault / "index.md")})
+            self.assertEqual([(Path(r["path"]).name, r["vault"], r["edited"], r["read"]) for r in n],
+                             [("Cooking", True, 1, 1), ("Job-Seeking", False, 0, 1)])  # a repository in a vault owns its files
+
+    def test_denials_are_kept_apart_from_errors_and_sessions_resolve_by_id(self):
+        with tempfile.TemporaryDirectory() as td:
+            proj = Path(td) / "projects" / "p"
+            proj.mkdir(parents=True)
+            lines = [
+                {"type": "user", "message": {"content": "do it"}},
+                {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "env"}}]}},
+                {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": True,
+                                                          "content": "Permission for this action was denied by a rule."}]}},
+                {"type": "user", "isSidechain": True, "message": {"content": "no, never do that"}},
+            ]
+            f = proj / "abc123.jsonl"
+            f.write_text("not json\n" + "".join(json.dumps(o) + "\n" for o in lines), encoding="utf-8")
+            old = os.environ.get("CLAUDE_CONFIG_DIR")
+            os.environ["CLAUDE_CONFIG_DIR"] = td
+            try:
+                self.assertEqual(ewu.find_session("abc123"), f)
+                self.assertEqual(ewu.find_session(None), f)
+            finally:
+                if old is None:
+                    os.environ.pop("CLAUDE_CONFIG_DIR", None)
+                else:
+                    os.environ["CLAUDE_CONFIG_DIR"] = old
+            h = ewu.harvest(f)
+            self.assertEqual(len(h["denials"]), 1)
+            self.assertEqual(h["errors"], [])
+            self.assertEqual(h["corrections"], [])  # sidechain turns are a subagent's, not the user's
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

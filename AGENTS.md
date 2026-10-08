@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repo is the evergreen plugin: self-maintaining, self-proving skills and knowledge for AI agents. Read `README.md` for the shape and `protocol/PROTOCOL.md` for the rules. Structure: `protocol/` (spec), `skills/*/SKILL.md` (fifteen skills), `agents/` (three subagents), `scripts/evergreen.py` (stdlib CLI, with `evergreen_sync.py`, `evergreen_worth.py` and `evergreen_setup.py` beside it; run `python scripts/test_evergreen.py` before changing the interval rule, and `scripts/bench_intervals.py` to see what a change would do), `templates/`, `setup/RECIPES.md` (the shared install recipes; public, so nothing private in it), `SETUP.md` (the plugin's own needs), `profile/`, `hooks/`, `evals/` and `TESTS.md` (the plugin's own suite and run log).
+This repo is the evergreen plugin: self-maintaining, self-proving skills and knowledge for AI agents. Read `README.md` for the shape and `protocol/PROTOCOL.md` for the rules. Structure: `protocol/` (spec), `skills/*/SKILL.md` (sixteen skills), `agents/` (three subagents), `scripts/evergreen.py` (stdlib CLI, with `evergreen_sync.py`, `evergreen_worth.py`, `evergreen_setup.py` and `evergreen_wrapup.py` beside it; run `python scripts/test_evergreen.py` before changing the interval rule, and `scripts/bench_intervals.py` to see what a change would do), `templates/`, `setup/RECIPES.md` (the shared install recipes; public, so nothing private in it), `SETUP.md` (the plugin's own needs), `profile/`, `hooks/`, `evals/` and `TESTS.md` (the plugin's own suite and run log).
 
 ## Commands
 
@@ -9,6 +9,7 @@ This repo is the evergreen plugin: self-maintaining, self-proving skills and kno
 - Validate plugin structure (Claude Code): `claude plugin validate .claude-plugin/plugin.json`
 - Is a skill worth its tokens (static reading, plus the with/without A/B when `claude plugin eval` results exist): `python scripts/evergreen.py worth skills/` or `worth <skill> --against HEAD` for an edit; a catalog with `worth <dir> <dir> ... --triage`; `--lite` is the free quick scan (adds the case lint); `--probe`, `--ab` and `--heavy` spend model runs (`evergreen_ab.py`), so run them only when asked
 - What a unit needs on this machine and how to install it: `python scripts/evergreen.py setup <unit>` (exit 1 when a required need is missing); record what worked with `--record <id> --env <key> --how "..." --verified`; access needs: `--request <id>` drafts the request, `--attempt <id> --result ...` logs how it went
+- Harvest a session for the wrap-up (read-only; corrections, refused calls, errors, repeats, token sinks, slow calls, files and stores touched): `python scripts/evergreen.py wrapup [--session <id>] [--json]`
 - Benchmark the refresh schedule (synthetic units, the real rule imported): `python scripts/bench_intervals.py`
 - Skill evals (Claude Code 2.1.269+): `claude plugin eval . --trust-plugin --no-publish --case "trigger-*" --judge-model sonnet` (cases in `evals/cases/`; on native Windows only cases without Bash run)
 

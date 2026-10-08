@@ -501,7 +501,7 @@ def run_ab(skill_dir: Path, unit: Path | None, runs: int = 3, case_glob: str | N
     kinds = ew.case_kinds(home)
     cases = [c for cid, c in sorted(kinds.items()) if c.get("kind") in ew.VALUE_KINDS and not c.get("decoy")
              and (home.resolve() == skill_dir.resolve() or c.get("_skill", "").split(":")[-1] == name)
-             and (not case_glob or fnmatch.fnmatch(cid, case_glob)) and (case_glob or not c.get("redundant"))]
+             and (not case_glob or ew.case_match(cid, case_glob)) and (case_glob or not c.get("redundant"))]
     if not cases:
         print(f"[worth --ab] {name}: no value case to run (action or outcome, not redundant)")
         return None

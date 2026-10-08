@@ -1,0 +1,14 @@
+{
+  "evergreen": "1.0",
+  "name": "docs-deploy",
+  "kind": "skill",
+  "main": "SKILL.md",
+  "files": {
+    "learnings": "LEARNINGS.md"
+  },
+  "protocol": "plugin",
+  "tier": "none",
+  "interval_days": null,
+  "last_checked": "2026-10-08",
+  "next_due": null
+}
