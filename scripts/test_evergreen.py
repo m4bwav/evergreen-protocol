@@ -2118,6 +2118,15 @@ WRAPUP_FIXTURE = Path(__file__).resolve().parent.parent / "evals" / "fixtures" /
 
 
 class Wrapup(unittest.TestCase):
+    def test_repeated_case_flags_add_up(self):
+        import argparse
+        p = argparse.ArgumentParser()
+        p.add_argument("--case", action=ew.CaseGlobs)
+        a = p.parse_args(["--case", "action-5", "--case", "outcome-*"])
+        self.assertEqual(a.case, "action-5|outcome-*")
+        self.assertTrue(ew.case_match("outcome-3", a.case) and ew.case_match("action-5", a.case))
+        self.assertFalse(ew.case_match("action-6", a.case))
+
     def test_harvest_finds_the_signals_in_the_fixture_session(self):
         h = ewu.harvest(WRAPUP_FIXTURE)
         self.assertEqual(len(h["corrections"]), 1)  # not the task, not "Thanks, looks good."

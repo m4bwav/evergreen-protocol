@@ -752,6 +752,18 @@ def result_files(unit: Path, results: list[str] | None) -> list[Path]:
     return paths
 
 
+def case_match(cid: str, case_glob: str) -> bool:
+    """One case id against a --case value: globs joined by | (repeated --case flags are joined that way), any match."""
+    return any(fnmatch.fnmatch(cid, g.strip()) for g in case_glob.split("|") if g.strip())
+
+
+class CaseGlobs(__import__("argparse").Action):
+    """Repeated --case flags add up instead of the last one winning silently (L-019: two runs lost to it)."""
+    def __call__(self, parser, ns, value, option=None):
+        prev = getattr(ns, self.dest, None)
+        setattr(ns, self.dest, f"{prev}|{value}" if prev else value)
+
+
 def ab_report(unit: Path, results: list[str] | None = None, skill: str | None = None, case_glob: str | None = None) -> dict | None:
     """Latest with-and-without result per value case (action or outcome), merged across result files."""
     kinds = case_kinds(unit)
@@ -769,7 +781,7 @@ def ab_report(unit: Path, results: list[str] | None = None, skill: str | None = 
             kind = meta.get("kind") or cid.split("-")[0]
             if kind not in VALUE_KINDS or meta.get("decoy"):
                 continue
-            if case_glob and not fnmatch.fnmatch(cid, case_glob):
+            if case_glob and not case_match(cid, case_glob):
                 continue
             if skill and meta.get("_skill", "").split(":")[-1] != skill:
                 continue  # in a plugin, a case counts for the one skill it names
@@ -1329,7 +1341,7 @@ def add_parsers(sp, common):
     s.add_argument("--replaced-by", help="what does the job now, with a dated source, for --set SUPERSEDED")
     s.add_argument("--against", metavar="REV", help="judge the edit since this git revision (e.g. HEAD, HEAD~1, master)")
     s.add_argument("--results", nargs="*", metavar="PATH", help="aggregate-result.json files or folders (default: <unit>/evals/results)")
-    s.add_argument("--case", metavar="GLOB", help="only these value cases, e.g. 'action-*'")
+    s.add_argument("--case", metavar="GLOB", action=CaseGlobs, help="only these value cases, e.g. 'action-*'; repeat the flag or join with | for several ('action-5|action-6')")
     s.add_argument("--wrap", metavar="DIR", help="build a throwaway plugin around one standalone skill for `claude plugin eval`")
     s.add_argument("--no-peers", action="store_true", help="skip the description overlap check against other installed skills")
     s.add_argument("--record", action="store_true", help="write the verdict into the unit's evergreen.json (worth block)")
