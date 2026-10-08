@@ -1,6 +1,6 @@
 ---
 name: evergreen-wrapup
-description: "End-of-session wrap-up that turns what a work session learned into lasting improvements, keeping only what will save time or tokens or raise quality: harvest the transcript (corrections, refused calls, errors, repeated commands, token sinks, slow calls, files and stores touched), drop what fails a usefulness gate, then send each survivor to its narrowest home (a test, hook or script; a skill's LEARNINGS or a fix to the skill; project docs and handoff; a knowledge base; the user profile; an install recipe) and improve the scripts and processes that cost the most. Use when the user says 'wrap up', 'wrap-up', 'wrapup', 'end of session', 'consolidate what we learned', 'retro', 'compound this', 'what should we keep from this session', 'before I close this', or at the end of a long session that changed skills, scripts or several repos. Not for capturing one lesson mid-task (evergreen-learn), a handoff or project note alone (everlast-capture), or merging a unit's LEARNINGS entries (evergreen-learn consolidation)."
+description: "End-of-session wrap-up that turns what a work session learned into lasting improvements, keeping only what will save time or tokens or raise quality: harvest the transcript (corrections, refused calls, errors, repeated commands, token sinks, slow calls, files and stores touched), drop what fails a usefulness gate, then send each survivor to its narrowest home (a test, hook or script; a skill's LEARNINGS or a fix to the skill; project docs and handoff; a knowledge base, including vaults and notes folders no skill owns; the user profile; an install recipe) and improve the scripts and processes that cost the most. Use when the user says 'wrap up', 'wrap-up', 'wrapup', 'end of session', 'consolidate what we learned', 'retro', 'compound this', 'what should we keep from this session', 'before I close this', or at the end of a long session that changed skills, scripts or several repos. Not for capturing one lesson mid-task (evergreen-learn), a handoff or project note alone (everlast-capture), or merging a unit's LEARNINGS entries (evergreen-learn consolidation)."
 ---
 
 # Evergreen wrap-up
@@ -15,9 +15,10 @@ Read `<plugin root>/evergreen.json`. If `contradiction` is set or today is on or
 
 ## Step 1: harvest (two sources)
 
-1. The transcript: `EG wrapup` (the current session; `--session <id>` for another, `--json` for the raw data). It prints IDs: C corrections, D refused calls, E errors, R repeated command shapes, T token sinks, S slow calls, plus skills used, files changed per repository with the stores there (`ai-docs/`, `AGENTS.md`, evergreen units), web research and compactions. No transcript (another harness, a cloud sandbox): skip to 2 and say so.
+1. The transcript: `EG wrapup` (the current session; `--session <id>` for another, `--json` for the raw data). It prints IDs: C corrections, D refused calls, E errors, R repeated command shapes, T token sinks, S slow calls, plus skills used, files changed per repository with the stores there (`ai-docs/`, `AGENTS.md`, evergreen units), K knowledge bases outside any skill or plugin that the session touched or talked about, web research and compactions. No transcript (another harness, a cloud sandbox): skip to 2 and say so.
 2. Your own account of the session, for what a transcript cannot show: decisions and their reasons, options rejected, a belief about the code that turned out false, what the user seemed to want but did not say, work left unfinished. Write these as candidates too, `M1`, `M2`...
-3. The session-start lines: units flagged `consolidate:N>M`, `failing-tests` or stale that this session touched join the list.
+3. Standalone knowledge bases (a vault, a folder of research reports, a notes tree) reach the wrap-up only through the private registry `knowledge-bases.json` in the evergreen store. The K section lists the registered ones this session matched and any unregistered vault it touched. When it says none are registered, run `EG wrapup --kb-discover <the user's notes and project folders>` once, show the user what it found, and register the ones they want written to: `EG wrapup --kb-add <path> --topics a,b,c --write "<how entries are added>" [--private]`.
+4. The session-start lines: units flagged `consolidate:N>M`, `failing-tests` or stale that this session touched join the list.
 
 One list, every candidate one line. Expect most of it to be noise.
 
@@ -44,7 +45,9 @@ Weigh what a line costs where it lands: a line in an always-loaded file (CLAUDE.
 | A manual step repeated three times, or slow or costly work (R, S, T) | a script, alias or flag: extend an existing script first; a new one only when nothing fits | Step 4 |
 | A skill misbehaved (did not fire, wrong route, said it acted and did not) | that skill's `LEARNINGS.md`, then the fix | `evergreen-learn`, then `evergreen-tune` |
 | A skill's claim proved wrong | the claim, fixed in place, a `C-` entry, `EG flag <unit> --contradiction` | `evergreen-learn` Step 3 |
-| A skill or knowledge base got a fact or method worth keeping | its `RESEARCH.md`, `references/` or knowledge base (a plugin's `kb/`, a scout beat's notes) | that unit's own curate skill when it has one |
+| A skill or plugin's knowledge base got a fact or method worth keeping | its `RESEARCH.md`, `references/` or knowledge base (a plugin's `kb/`, a scout beat's notes) | that unit's own curate skill when it has one |
+| A fact, finding, reference or decision on a subject a standalone knowledge base covers (a K row) | that knowledge base, in its own conventions: its `write` field, else what its index or README shows (one note per topic, an index line, relative links, a dated source) | edit it directly; update the existing note before adding one |
+| A subject that recurs with no home anywhere | a proposal in the report: register an existing folder, or start a knowledge base | the user decides; never create one unasked |
 | A project solution, decision, plan, or unfinished work | the project's doc set and `HANDOFF.md` | `everlast-capture` (else the repo's `ai-docs/` log) |
 | A user correction, preference or refusal (C, D) | the user profile (`user/PROFILE.md` in an everlast vault, else `profile/AI-PREFERENCES.md`) and a pointer in native memory | `everlast-capture` or `evergreen-learn` |
 | A fact about a machine or tool | `ENVIRONMENTS.md` (vault user tier, else `profile/`) | same |
@@ -52,7 +55,7 @@ Weigh what a line costs where it lands: a line in an always-loaded file (CLAUDE.
 | A procedure used on three or more dates | a new skill, at most one per wrap-up, as a trial | `everlast.py promote-scan`, then `evergreen-new` and `evergreen-test` |
 | A lesson general to a shared plugin or public repository | that repository, by its own contribution rules (pull request) | the repository's `AGENTS.md` |
 
-Content naming people, credentials, internal hosts or customers goes only to a private tier (everlast `--private`, or the user tier), never into a shared repository.
+A knowledge base marked private never feeds a shared repository, and nothing private from the session goes into one that is not. Content naming people, credentials, internal hosts or customers goes only to a private tier (everlast `--private`, or the user tier), never into a shared repository.
 
 ## Step 4: improve scripts and processes (the time and token savers)
 

@@ -2148,6 +2148,50 @@ class Wrapup(unittest.TestCase):
         self.assertEqual(ewu.command_shapes("python D:/x/scripts/evergreen.py audit --brief | head -5"), ["python evergreen.py audit"])
         self.assertEqual(ewu.command_shapes("FOO=1 gh pr view 12 --json url"), ["gh pr view"])
 
+    def test_standalone_knowledge_bases_are_discovered_registered_and_matched(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "notes" / "Cooking"
+            (vault / ".obsidian").mkdir(parents=True)
+            (vault / "recipes").mkdir()
+            (vault / "recipes" / "tortilla.md").write_text("# Flour tortilla\n", encoding="utf-8")
+            reports = root / "notes" / "reports"
+            reports.mkdir()
+            for i in range(8):
+                (reports / f"gpu-prices-{i}.md").write_text(f"# GPU prices {i}\n", encoding="utf-8")
+            skill = root / "notes" / "some-skill"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+            for i in range(9):
+                (skill / f"ref-{i}.md").write_text("x", encoding="utf-8")
+            other_vault = root / "Garden"
+            (other_vault / ".obsidian").mkdir(parents=True)
+            old = os.environ.get("EVERGREEN_HOME")
+            os.environ["EVERGREEN_HOME"] = str(root / "store")
+            try:
+                found = {Path(f["path"]).name: f for f in ewu.discover([str(root / "notes")], depth=3)}
+                self.assertEqual(set(found), {"Cooking", "reports"})  # not the vault's subfolder, not a skill
+                self.assertIn("tortilla", found["Cooking"]["topics"])
+                ewu.kb_add(str(vault), "Cooking", ["tortilla", "recipe"], "one note per dish", False)
+                ewu.kb_add(str(vault), "Cooking", ["tortilla"], "", True)  # same path replaces, not duplicates
+                self.assertEqual(len(ewu.load_kbs()), 1)
+                m = ewu.kb_matches(["Make me a Tortilla recipe that keeps"], {str(vault / "recipes" / "tortilla.md")},
+                                   {str(other_vault / "beds.md")})
+                self.assertEqual(m["kb_count"], 1)
+                k = m["kbs"][0]
+                self.assertEqual((k["name"], k["edited"], k["topics"], k["private"]), ("Cooking", 1, {"tortilla": 2}, True))
+                self.assertEqual(m["kb_unregistered"], [str(other_vault)])
+                self.assertEqual(ewu.kb_matches(["nothing relevant"], set(), set())["kbs"], [])
+                repo = vault / "code-repo"
+                (repo / ".git").mkdir(parents=True)
+                m = ewu.kb_matches([], {str(repo / "main.py")}, set())
+                self.assertEqual(m["kbs"], [])  # a repository inside a vault owns its own files
+            finally:
+                if old is None:
+                    os.environ.pop("EVERGREEN_HOME", None)
+                else:
+                    os.environ["EVERGREEN_HOME"] = old
+
     def test_denials_are_kept_apart_from_errors_and_sessions_resolve_by_id(self):
         with tempfile.TemporaryDirectory() as td:
             proj = Path(td) / "projects" / "p"

@@ -154,7 +154,7 @@ def harvest(path: Path, top: int = 8) -> dict:
     slow = []
     order = []                            # tool names in call order, with error flags, for retry detection
     skills, slash, web, agents = Counter(), Counter(), [], []
-    files = set()
+    files, reads, said = set(), set(), []
     compactions, first_ts, last_ts, cwd = 0, None, None, None
     with path.open(encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -191,6 +191,8 @@ def harvest(path: Path, top: int = 8) -> dict:
                         skills[str(inp["skill"])] += 1
                     elif name in EDIT_TOOLS and (inp.get("file_path") or inp.get("notebook_path")):
                         files.add(str(inp.get("file_path") or inp.get("notebook_path")))
+                    elif name == "Read" and inp.get("file_path"):
+                        reads.add(str(inp["file_path"]))
                     elif name == "WebSearch":
                         web.append("search: " + str(inp.get("query", ""))[:100])
                     elif name == "WebFetch":
@@ -228,6 +230,7 @@ def harvest(path: Path, top: int = 8) -> dict:
                 if not text or text.startswith(META_PREFIXES):
                     continue
                 user_turns += 1
+                said.append(text[:4000])
                 if user_turns > 1 and CORRECTION_RE.search(text):
                     corrections.append(re.sub(r"\s+", " ", text)[:220])
     # a retry: the same tool called again right after its error
@@ -276,7 +279,179 @@ def harvest(path: Path, top: int = 8) -> dict:
         "repos": {k: {**v, "units": sorted(v["units"]), "kinds": dict(v["kinds"])} for k, v in repos.items()},
         "web": web[:top * 2], "web_count": len(web), "agents": agents[:top],
         "subagent_transcripts": len(list(sub_dir.glob("*.jsonl"))) if sub_dir.is_dir() else 0,
+        **kb_matches(said + web + agents + list(skills), files, reads, top),
     }
+
+
+# Knowledge bases that belong to no skill or plugin (an Obsidian vault, a folder of research reports, a notes tree, a
+# graphify graph) are invisible to routing unless something names them. The registry names them: a private file in the
+# evergreen store, never in a shared repository, since it holds this machine's paths and what each base is about.
+KB_FILE = "knowledge-bases.json"
+KB_MARKERS = {".obsidian": "Obsidian vault", "graphify-out": "graphify knowledge graph"}
+SKIP_DIRS = {"node_modules", "__pycache__", "venv", ".venv", "dist", "build", "bin", "obj", "ai-docs", "skills", "evals"}
+CODE_EXT = {".py", ".js", ".mjs", ".ts", ".tsx", ".cs", ".fs", ".ps1", ".sh", ".go", ".rs", ".java", ".json", ".yml", ".yaml"}
+STOPWORDS = set("the and for with from that this what when how why your into about notes note index readme report "
+                "guide plan plans draft research summary overview 2024 2025 2026 2027 docs doc file files".split())
+
+
+def kb_registry_path() -> Path:
+    try:
+        import evergreen as eg
+        return eg.evergreen_home() / KB_FILE
+    except Exception:  # standalone use: the store's default place
+        env = os.environ.get("EVERGREEN_HOME")
+        return (Path(env).expanduser() if env else Path.home() / ".evergreen") / KB_FILE
+
+
+def load_kbs() -> list[dict]:
+    try:
+        d = json.loads(kb_registry_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [k for k in d.get("knowledge_bases", []) if isinstance(k, dict) and k.get("path")]
+
+
+def _inside(f: str, root: str) -> bool:
+    try:
+        Path(f).expanduser().resolve().relative_to(Path(root).expanduser().resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def in_kb(f: str, root: str) -> bool:
+    """f is part of the knowledge base at root: inside it, and not inside a git repository nested below it (a vault
+    that holds whole repositories does not own their files; the repository and its own stores do)."""
+    if not _inside(f, root):
+        return False
+    g = git_root(Path(f).expanduser().parent)
+    return g is None or _inside(root, str(g))
+
+
+def kb_root_of(p: Path) -> Path | None:
+    """The nearest folder above p that is a knowledge base by its marker (a vault, a graph), unless a git repository
+    nested inside it comes first."""
+    for d in p.parents:
+        if (d / ".git").exists():
+            return None
+        if any((d / m).is_dir() for m in KB_MARKERS):
+            return d
+    return None
+
+
+def kb_matches(texts: list[str], files: set, reads: set, top: int = 8) -> dict:
+    """Registered knowledge bases this session touched (files edited or read inside) or talked about (a topic word in
+    the user's turns, web queries, subagent tasks, skill names or file paths), strongest first; and marker-bearing
+    folders the session touched that are not registered."""
+    kbs = load_kbs()
+    blob = " ".join(texts + sorted(files) + sorted(reads)).lower()
+    rows = []
+    for k in kbs:
+        edited = sum(1 for f in files if in_kb(f, k["path"]))
+        read = sum(1 for f in reads if in_kb(f, k["path"]))
+        hits = {}
+        for t in k.get("topics", []):
+            n = len(re.findall(r"(?<![a-z0-9])" + re.escape(str(t).lower()) + r"(?![a-z0-9])", blob))
+            if n:
+                hits[t] = n
+        if edited or read or hits:
+            rows.append({"name": k.get("name") or Path(k["path"]).name, "path": k["path"], "edited": edited, "read": read,
+                         "topics": hits, "write": k.get("write", ""), "private": bool(k.get("private"))})
+    rows.sort(key=lambda r: -(3 * r["edited"] + r["read"] + sum(r["topics"].values())))
+    known = [k["path"] for k in kbs]
+    loose = set()
+    for f in files | reads:
+        r = kb_root_of(Path(f))
+        if r and not any(_inside(str(r), kp) or _inside(kp, str(r)) for kp in known):
+            loose.add(str(r))
+    return {"kbs": rows[:top], "kb_unregistered": sorted(loose)[:top], "kb_registry": str(kb_registry_path()), "kb_count": len(kbs)}
+
+
+def _walk(base: Path, depth: int):
+    yield base
+    if depth <= 0:
+        return
+    try:
+        kids = sorted(c for c in base.iterdir() if c.is_dir() and not c.name.startswith(".") and c.name not in SKIP_DIRS)
+    except OSError:
+        return
+    for c in kids:
+        yield from _walk(c, depth - 1)
+
+
+def kb_reason(d: Path) -> str | None:
+    """Why a folder looks like a standalone knowledge base, or None. A skill or evergreen unit (SKILL.md, evergreen.json)
+    and a project's ai-docs are not: those already have owners."""
+    for m, why in KB_MARKERS.items():
+        if (d / m).is_dir():
+            return why
+    if (d / "SKILL.md").exists() or (d / "evergreen.json").exists() or d.name == "ai-docs":
+        return None
+    try:
+        kids = [f for f in d.iterdir() if f.is_file()]
+    except OSError:
+        return None
+    mds = [f for f in kids if f.suffix.lower() == ".md"]
+    code = [f for f in kids if f.suffix.lower() in CODE_EXT]
+    if len(mds) >= 8 and len(mds) >= 2 * len(code):
+        has_index = any((d / n).is_file() for n in ("INDEX.md", "index.md", "README.md", "Home.md"))
+        return f"folder of notes ({len(mds)} markdown files{', with an index' if has_index else ''})"
+    return None
+
+
+def suggest_topics(d: Path, n: int = 6) -> list[str]:
+    words = Counter()
+    for w in re.findall(r"[a-z][a-z0-9]{3,}", d.name.lower()):
+        words[w] += 3
+    mds = []
+    for sub in _walk(d, 1):  # the base and its top folders only: a vault holding whole repositories stays fast
+        try:
+            mds += [f for f in sub.iterdir() if f.suffix.lower() == ".md"][:20]
+        except OSError:
+            continue
+        if len(mds) >= 60:
+            break
+    for f in mds[:60]:
+        words.update(re.findall(r"[a-z][a-z0-9]{3,}", f.stem.lower().replace("-", " ").replace("_", " ")))
+        try:
+            with f.open(encoding="utf-8", errors="replace") as fh:
+                head = next((x for x in (fh.readline() for _ in range(8)) if x.startswith("# ")), "")
+        except OSError:
+            head = ""
+        words.update(re.findall(r"[a-z][a-z0-9]{3,}", head.lower()))
+    return [w for w, _ in words.most_common(n * 3) if w not in STOPWORDS][:n]
+
+
+def discover(dirs: list[str], depth: int = 3) -> list[dict]:
+    """Folders under dirs that look like knowledge bases, outermost first (a vault's subfolders are part of it)."""
+    out, found = [], []
+    for base in dirs:
+        for d in _walk(Path(base).expanduser(), depth):
+            if any(_inside(str(d), f) for f in found):
+                continue
+            why = kb_reason(d)
+            if why:
+                found.append(str(d))
+                out.append({"path": str(d), "why": why, "topics": suggest_topics(d)})
+    return out
+
+
+def kb_add(path: str, name: str | None, topics: list[str], write: str, private: bool) -> Path:
+    """Add or replace one registry entry (matched by resolved path); the file is created on first use."""
+    p = kb_registry_path()
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        d = {"_format": "Standalone knowledge bases for evergreen-wrapup: path, topics (words that mean a session "
+                        "belongs here), write (how to add to it), private (never copy into a shared repository).",
+             "knowledge_bases": []}
+    full = str(Path(path).expanduser().resolve())
+    entry = {"name": name or Path(full).name, "path": full, "topics": [t.strip() for t in topics if t.strip()],
+             "write": write, "private": private}
+    d["knowledge_bases"] = [k for k in d.get("knowledge_bases", []) if str(Path(k.get("path", "")).expanduser().resolve()) != full] + [entry]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+    return p
 
 
 def group_slow(slow: list) -> list[dict]:
@@ -327,6 +502,13 @@ def render(h: dict) -> str:
         rows.append(f"- {repo}: {r['files']} files ({', '.join(f'{k} {v}' for k, v in r['kinds'].items())}); stores: "
                     f"{', '.join(stores) or 'none'}" + (f"; evergreen units: {', '.join(r['units'])}" if r["units"] else ""))
     sec("Files changed, by repository", rows)
+    rows = [f"- K{i}: {k['name']} ({k['path']}){' [private]' if k['private'] else ''}: edited {k['edited']}, read {k['read']}"
+            + (f", topics {', '.join(f'{t} x{n}' for t, n in k['topics'].items())}" if k["topics"] else "")
+            + (f"; write: {k['write']}" if k["write"] else "") for i, k in enumerate(h["kbs"], 1)]
+    rows += [f"- unregistered knowledge base touched: {d} (register it: `wrapup --kb-add \"{d}\" --topics ...`)" for d in h["kb_unregistered"]]
+    if not h["kb_count"]:
+        rows.append(f"- no standalone knowledge bases registered ({h['kb_registry']}); `wrapup --kb-discover <dir>` proposes some")
+    sec("Knowledge bases outside skills and plugins (K)", rows)
     sec(f"Web research ({h['web_count']} calls)", [f"- {w}" for w in h["web"]])
     if h["agents"] or h["subagent_transcripts"]:
         sec("Subagents", [f"- {a}" for a in h["agents"]] + [f"- {h['subagent_transcripts']} subagent transcripts beside the session (not harvested)"])
@@ -335,6 +517,25 @@ def render(h: dict) -> str:
 
 
 def cmd_wrapup(a):
+    if a.kb_add:
+        p = kb_add(a.kb_add, a.name, (a.topics or "").split(","), a.write or "", a.private)
+        print(f"[evergreen] knowledge base registered: {a.kb_add} -> {p}")
+        return
+    if a.kb_list:
+        kbs = load_kbs()
+        print(f"{len(kbs)} knowledge base(s) in {kb_registry_path()}")
+        for k in kbs:
+            print(f"- {k.get('name')}: {k['path']}{' [private]' if k.get('private') else ''}; topics {', '.join(k.get('topics', []))}"
+                  + (f"; write: {k['write']}" if k.get("write") else ""))
+        return
+    if a.kb_discover:
+        found = discover(a.kb_discover, a.depth)
+        known = [k["path"] for k in load_kbs()]
+        print(f"{len(found)} folder(s) that look like knowledge bases; register the ones worth writing to with --kb-add")
+        for f in found:
+            mark = " (registered)" if any(_inside(f["path"], kp) for kp in known) else ""
+            print(f"- {f['path']}{mark}: {f['why']}; suggested topics: {', '.join(f['topics'])}")
+        return
     path = find_session(a.session)
     if not path:
         print("[evergreen] wrapup: no session transcript found (Claude Code keeps them under ~/.claude/projects); "
@@ -349,6 +550,14 @@ def add_parsers(sp, common):
     s.add_argument("--session", help="a session id or a transcript path (default: the most recently written transcript, the current session)")
     s.add_argument("--json", action="store_true")
     s.add_argument("--top", type=int, default=8, help="rows per section (default 8)")
+    s.add_argument("--kb-discover", nargs="+", metavar="DIR", help="list folders under DIR that look like standalone knowledge bases (vaults, notes folders, graphs)")
+    s.add_argument("--depth", type=int, default=3, help="with --kb-discover: how deep to look (default 3)")
+    s.add_argument("--kb-add", metavar="PATH", help="register a standalone knowledge base in the store's knowledge-bases.json")
+    s.add_argument("--kb-list", action="store_true", help="list the registered knowledge bases")
+    s.add_argument("--name", help="with --kb-add: a short name (default: the folder name)")
+    s.add_argument("--topics", help="with --kb-add: comma list of words that mean a session's lesson belongs here")
+    s.add_argument("--write", help="with --kb-add: how to add to it, e.g. 'one note per topic, add a line to INDEX.md, relative links'")
+    s.add_argument("--private", action="store_true", help="with --kb-add: private content; never copy from it into a shared repository")
     s.set_defaults(fn=cmd_wrapup)
 
 
