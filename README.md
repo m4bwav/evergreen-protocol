@@ -14,6 +14,7 @@ This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the eviden
 | `protocol/` | The paradigm. `PROTOCOL.md` is the spec; `INTERVALS.md` the refresh math; `TESTING.md` how a skill is proven and tuned; `SETUP.md` how a skill gets what it needs on each machine; `LEARNINGS-FORMAT.md`, `CODEMAP-FORMAT.md`, `PORTABILITY.md` the details. |
 | `skills/evergreen-refresh` | Re-research a due unit on four tracks, apply delta edits, re-test if the skill changed, reschedule. |
 | `skills/evergreen-learn` | Capture a correction, repeated error, workaround, environment fact, preference, or failed test into the right file. |
+| `skills/evergreen-wrapup` | End-of-session wrap-up: harvest the session transcript (`evergreen.py wrapup`: corrections, refused calls, errors, repeated commands, token sinks, slow calls, files and stores touched), drop what fails a four-question usefulness gate, send each survivor to its narrowest home through the skill that owns it, and fix the scripts and habits that cost the most time or tokens. |
 | `skills/evergreen-map` | Build and update the plugin's own codemap of any repo you explore. |
 | `skills/evergreen-convert` | Make an existing skill or doc evergreen without rewriting it; skills get a test suite scaffolded. |
 | `skills/evergreen-new` | Create new skills evergreen by default, handed over only with a run suite. |

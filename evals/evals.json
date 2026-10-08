@@ -279,6 +279,92 @@
         }
       },
       "runs": 3
+    },
+    {
+      "id": "trigger-12",
+      "kind": "trigger",
+      "prompt": "OK, I think we're done for today. Let's wrap up: keep whatever from this session is actually worth keeping, and fix anything that slowed us down.",
+      "expectations": [
+        "the evergreen-wrapup skill is invoked"
+      ],
+      "runs": 3,
+      "baseline": "2026-10-08 claude plugin eval 2.1.292, no plugin: 0/3 fired; with the plugin 3/3"
+    },
+    {
+      "id": "trigger-13",
+      "kind": "trigger",
+      "prompt": "Before I close this window, consolidate what we learned this session into the skills and docs. Only the stuff that will actually help next time.",
+      "expectations": [
+        "the evergreen-wrapup skill is invoked"
+      ],
+      "runs": 3,
+      "baseline": "2026-10-08 claude plugin eval 2.1.292, no plugin: 0/3 fired; with the plugin 3/3"
+    },
+    {
+      "id": "decoy-7",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "Wrap up the parse_config function in config.py: add the missing return statement and a short docstring.",
+      "expectations": [
+        "no evergreen skill is invoked: finishing a function in the user's code, not a session wrap-up"
+      ],
+      "runs": 3
+    },
+    {
+      "id": "outcome-3",
+      "kind": "outcome",
+      "skill": "evergreen-wrapup",
+      "prompt": "Under the evergreen wrap-up, a session's harvest has five candidates. For each, answer KEEP (with where it goes) or DROP, one line each, labelled (a) to (e):\n(a) The feature is finished; 14 files changed.\n(b) `az monitor app-insights query` failed with 403 twice; `az login --tenant contoso-dev` fixed it, and the next query returned rows.\n(c) `python scripts/build.py --all` ran 9 times this session, about 4 minutes each; `--changed` would rebuild only the touched pages.\n(d) The user said: never push straight to master in this repo, always open a pull request.\n(e) The CLI's flags are listed in the README.",
+      "files": [],
+      "expectations": [
+        "(a) and (e) are dropped: completion news and something derivable from the README",
+        "(b) is kept as a setup or access recipe or a project solution with the verified command",
+        "(c) is kept as a script or process improvement (use or add the faster flag), with the saving named",
+        "(d) is kept as a rule in the narrowest home: a hook or branch protection, or the repository's AGENTS.md or the user profile",
+        "regex on the answer: (?im)\\(a\\).*drop",
+        "regex on the answer: (?im)\\(e\\).*drop"
+      ],
+      "runs": 3,
+      "baseline": "2026-10-08 worth --ab (sonnet): without the skill 3 of 3 passed; with it 3 of 3 (an easy knowledge check, kept as a regression guard for the gate)"
+    },
+    {
+      "id": "action-5",
+      "kind": "action",
+      "skill": "evergreen-wrapup",
+      "fixture": "wrapup-session",
+      "prompt": "Wrap up the session whose transcript is <fixture>/session.jsonl. It used the docs-deploy skill in <fixture>/docs-deploy. Keep only what is worth keeping.",
+      "expectations": [
+        "the agent harvests the transcript with the wrapup command",
+        "it records the venv correction (use .venv's python, never pip install into the system Python) as a learning in the docs-deploy skill, with a Trigger and a Hypothesis",
+        "it does not record completion news such as 'published 42 pages'"
+      ],
+      "evidence": {
+        "type": "file_contains",
+        "path": "<fixture>/docs-deploy/LEARNINGS.md",
+        "match": "(?is)###\\s*L-\\d+.*venv.*Trigger"
+      },
+      "runs": 3,
+      "baseline": "2026-10-08 worth --ab (sonnet): without the skill 3 of 3 passed; with it 3 of 3 (a short session read whole; action-6 is the case the skill exists for)"
+    },
+    {
+      "id": "action-6",
+      "kind": "action",
+      "skill": "evergreen-wrapup",
+      "fixture": "wrapup-long",
+      "prompt": "Wrap up the session whose transcript is <fixture>/session.jsonl. It used the site-build skill in <fixture>/site-build. Keep only what is worth keeping.",
+      "expectations": [
+        "the agent harvests the transcript with the wrapup command rather than reading it whole",
+        "it finds that `python build.py --all` ran nine times at about four minutes each and that build.py has a `--changed` flag",
+        "it changes the site-build skill (or records a plan or learning) so a rebuild after an edit uses `--changed`, naming the time saved",
+        "it does not record the link fixes themselves (completion news)"
+      ],
+      "evidence": {
+        "type": "file_contains",
+        "path": "<fixture>/site-build/SKILL.md",
+        "match": "--changed"
+      },
+      "runs": 3,
+      "baseline": "2026-10-08 worth --ab (sonnet): without the skill 1 of 3 passed; with it 3 of 3 at 0.7x the cost"
     }
   ]
 }

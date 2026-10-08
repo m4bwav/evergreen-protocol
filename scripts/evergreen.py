@@ -2288,6 +2288,11 @@ def main(argv=None):
         esu.add_parsers(sp, common)  # setup
     except Exception as e:  # optional like the sync module
         print(f"[evergreen] setup command unavailable: {e}", file=sys.stderr)
+    try:
+        import evergreen_wrapup as ewu
+        ewu.add_parsers(sp, common)  # wrapup
+    except Exception as e:  # optional like the sync module
+        print(f"[evergreen] wrapup command unavailable: {e}", file=sys.stderr)
 
     a = p.parse_args(argv)
     if not a.cmd:

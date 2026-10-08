@@ -93,17 +93,17 @@
   ],
   "counts": {
     "learnings": 24,
-    "changes": 39,
-    "research": 54,
-    "tests": 6
+    "changes": 40,
+    "research": 58,
+    "tests": 7
   },
   "consolidate_every": 25,
   "tests": {
-    "last_run": "2026-10-02T08:44",
-    "harness": "claude plugin eval 2.1.287 (trigger-11, decoy-6, trigger-9, decoy-5); worth --ab action-4 (sonnet); scripts/test_evergreen.py",
+    "last_run": "2026-10-08T14:03",
+    "harness": "claude plugin eval 2.1.292 (trigger-12, trigger-13, decoy-7); worth --ab outcome-3, action-5, action-6 (sonnet); scripts/test_evergreen.py",
     "env": "owner-pc",
-    "cases": 5,
-    "passed": 5,
+    "cases": 6,
+    "passed": 6,
     "failed": 0,
     "failing": [],
     "last_failure": null,
@@ -116,7 +116,7 @@
     "last_check": "2026-10-02"
   },
   "worth": {
-    "checked": "2026-10-02",
+    "checked": "2026-10-08",
     "skills": {
       "evergreen-setup": {
         "verdict": "KEEP",
@@ -129,6 +129,24 @@
         "modes": [],
         "gaps": 0,
         "checked": "2026-10-02",
+        "uses": {
+          "days": 60,
+          "interactive": 0,
+          "subagent": 0,
+          "headless": 0
+        }
+      },
+      "evergreen-wrapup": {
+        "verdict": "KEEP",
+        "why": "a real gain: +67 points (noise margin 54) at 0.7x the cost",
+        "body_tokens": 2047,
+        "listing_tokens": 256,
+        "specific_share": 0.62,
+        "delta": 0.67,
+        "cost_ratio": 0.7,
+        "modes": [],
+        "gaps": 0,
+        "checked": "2026-10-08",
         "uses": {
           "days": 60,
           "interactive": 0,
