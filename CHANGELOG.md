@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261008-2 · 2026-10-08 · evergreen-wrapup works in a desktop or web chat through a local connector
+- because: the owner's correction (plain desktop chat reaches local files and processes through connectors such as Desktop Commander, so the wrap-up should say how to work there instead of being written off)
+- files: skills/evergreen-wrapup/SKILL.md (Step 1)
+- A chat's own transcript is not on disk, so the harvest falls back to the conversation, which a chat usually still holds whole; the script, the stores and every edit go through the connector's process and file tools by host path, as PORTABILITY.md already describes for sandboxes.
+
 ### C-20261008-1 · 2026-10-08 · Protocol 1.17, version 0.16.0: `evergreen-wrapup`, an end-of-session wrap-up that harvests the transcript, keeps only what pays, routes it to its narrowest home and fixes the costliest scripts and habits
 - because: T-20261008-1 (KEEP: +67 points on action-6 at 0.7x the cost); the owner's request (a researched wrap-up command that consolidates a session's learnings into knowledge bases, skills, plugins and other stores, adding only what is helpful, and records and improves the scripts and processes that save time and tokens or raise quality); R-20261008-1 to R-20261008-4
 - files: skills/evergreen-wrapup/SKILL.md (new), scripts/evergreen_wrapup.py (new: `wrapup [--session ID|PATH] [--json] [--top N]`), scripts/evergreen.py (registers the module), scripts/evergreen_worth.py and evergreen_ab.py (`--case` adds up repeated flags and accepts `a|b`: `CaseGlobs`, `case_match`; L-019 recurred twice this session), LEARNINGS.md (L-019 updated), scripts/test_evergreen.py (class `Wrapup`, four tests; 115 pass), evals/evals.json and evals/cases (trigger-12, trigger-13, decoy-7, outcome-3, action-5, action-6), evals/fixtures/wrapup-session and wrapup-long (new: session transcripts and the skills they used), TESTS.md (T-20261008-1), protocol/PROTOCOL.md (1.17; §5 End of session), README.md, AGENTS.md, CLAUDE.md, plugin.json and .claude-plugin/plugin.json (0.16.0), RESEARCH.md (R-20261008-1 to R-20261008-4), evergreen.json (counts)
