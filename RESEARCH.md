@@ -68,6 +68,7 @@ Subject (self-maintaining skills and memory, and the mechanics this plugin depen
 - `CLAUDE.md OR AGENTS.md instruction file study arXiv <year>`
 - `code.claude.com docs plugins reference` and `code.claude.com docs skills` (frontmatter, hooks, plugin.json fields)
 - `Claude Code changelog hooks SessionStart` and `Cowork plugins hooks`
+- Official forums: the issues and, where enabled, Discussions of `anthropics/claude-code` (`site:github.com/anthropics/claude-code <terms> <month>`: known bugs in hooks, skills and plugin eval, staff replies on breaking changes); staff posts are primary, user reports are leads
 - `codemap OR CODEMAP.md agents repository map <year>` and `AGENTS.md evaluation coding agents`
 - `LLM knowledge cutoff staleness benchmark <year>`
 - `"skill library" OR "agent memory" refresh OR staleness OR "stale memory" schedule <year>` (survey open problem 12.3, FreshCache, STALE and stale-constraint follow-ups); `context7.com/docs/library-updates` and `docs.github.com/en/copilot/concepts/agents/copilot-memory` for the nearest shipped designs
