@@ -20,6 +20,7 @@ Subject (the goal and the latest thinking on reaching it):
 
 - `<query 1>`
 - `<query 2>`
+- Official forums of each tool, platform or vendor this unit depends on (announcements, deprecations, breaking changes and known bugs often land there before the docs): `<forum URL>` (announcements category: `<URL>`); a vendor Discourse, community site or the tool repository's GitHub Discussions. Search announcements first, then known issues, since the last check (`site:<forum host> <terms> <month>`, or Discourse `/latest.json`, a category `.rss`, `search.json?q=<terms> after:<date>`). Staff posts are primary sources; user posts are leads to confirm.
 
 Tooling (skills, plugins, MCP servers, scripts, knowledge graphs built for this subject):
 
@@ -48,7 +49,7 @@ Testing (how work on this subject is verified, and how skills for it are tuned):
 - `path:SKILL.md "<topic>" test OR eval OR evals` on GitHub; `"<topic>" evals OR "eval suite" OR regression "agent skill" <year>`
 - `site:arxiv.org "<topic>" agent evaluation OR benchmark <year>`; promptfoo, Inspect or DeepEval docs for assertion types that fit this subject
 
-Best sources (primary first): <official docs / changelog / standards body / key papers; for tooling: skills.sh, the MCP registry, the anthropics plugin catalogs; for testing: the subject's own test tools and the eval-framework docs>. Sources that proved noisy: <list, so they are skipped next time; SEO "top 10" listicles and scraped mega-directories are noise by default>.
+Best sources (primary first): <official docs / changelog / official forums of the tools used / standards body / key papers; for tooling: skills.sh, the MCP registry, the anthropics plugin catalogs; for testing: the subject's own test tools and the eval-framework docs>. Sources that proved noisy: <list, so they are skipped next time; SEO "top 10" listicles and scraped mega-directories are noise by default>.
 
 ## Findings log
 
