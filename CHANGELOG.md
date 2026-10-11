@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261010-2 · 2026-10-10 · `/wrap-up` ships with the plugin; SETUP.md lists everlast-protocol as an optional need with its install recipe
+- because: the owner's question (does a new computer get everything the wrap-up needs?): `/wrap-up` existed only as a personal command file on one machine, and the wrap-up's hand-off to everlast-capture was not listed as a need
+- files: commands/wrap-up.md (new), SETUP.md (Needs: everlast-protocol row; Install: its recipe), README.md (the evergreen-wrapup row)
+- The command only starts the skill, with the user's arguments, and is user-invoked only (`disable-model-invocation`). everlast-protocol stays optional: offered, never pushed; without it project notes go to the repository's `ai-docs/` log, as Step 3 already says.
+
 ### C-20261010-1 · 2026-10-10 · evergreen-wrapup asks what tool or check would have helped, and counts accuracy as a saving
 - because: the owner's request (the wrap-up should also look for scripts, processes and checks that are a net win for time, tokens or accuracy, not only friction the transcript shows)
 - files: skills/evergreen-wrapup/SKILL.md (Step 1 item 2, Step 4)
