@@ -16,7 +16,7 @@ Read `<plugin root>/evergreen.json`. If `contradiction` is set or today is on or
 ## Step 1: harvest (two sources)
 
 1. The transcript: `EG wrapup` (the current session; `--session <id>` for another, `--json` for the raw data). It prints IDs: C corrections, D refused calls, E errors, R repeated command shapes, T token sinks, S slow calls, plus skills used, files changed per repository with the stores there (`ai-docs/`, `AGENTS.md`, evergreen units), K notes and vaults outside any repository that the session edited or read, web research and compactions. No transcript (another harness, a cloud sandbox, a desktop or web chat, whose transcript is not on disk): skip to 2 and say so. In a chat or sandbox that has a local connector (Desktop Commander, a filesystem MCP), the rest still works on the host: run `EG` through the connector's process tool by its host path, and read and write stores through its file tools.
-2. Your own account of the session, for what a transcript cannot show: decisions and their reasons, options rejected, a belief about the code that turned out false, what the user seemed to want but did not say, work left unfinished. Write these as candidates too, `M1`, `M2`...
+2. Your own account of the session, for what a transcript cannot show: decisions and their reasons, options rejected, a belief about the code that turned out false, what the user seemed to want but did not say, work left unfinished. Then ask two hindsight questions, since the harvest sees only friction that happened: what script, flag, check or step would have made this session faster or cheaper had it existed at the start, and what result was wrong, or nearly shipped wrong, and which check (a test, an assertion, a comparison against a golden output, a look at the real output) would have caught it sooner. Write these as candidates too, `M1`, `M2`...
 3. The session-start lines: units flagged `consolidate:N>M`, `failing-tests` or stale that this session touched join the list.
 
 One list, every candidate one line. Expect most of it to be noise.
@@ -59,11 +59,12 @@ When the same kind of knowledge lands in the same place across wrap-ups, say so 
 
 ## Step 4: improve scripts and processes (the time and token savers)
 
-For each R, S, T or E candidate that survived:
+For each R, S, T or E candidate that survived, and each M candidate that names a missing tool or check:
 
 - Estimate the saving: how often it recurs times what it costs each time (minutes, tokens from the T line, seconds from the S line). Skip what saves less than the change costs to make and maintain.
 - Small and testable now (a flag, a filter on a noisy output, a wrapper for a repeated command chain, a retry or a clear error message in a script that failed): make it, run it before and after, and record the measured difference in the commit or `C-` entry.
 - Larger: a plan entry (`everlast-capture`, kind `plan`) with the evidence, the estimated saving and the next single action, so the next session can pick it up cold.
+- Accuracy counts as a saving too: a wrong result that reached the user, or was caught late, is worth a check that catches it on the spot (a test, an assertion or validation in the script, a diff against a known-good output). Add it where the work runs, prove it by making it fail on the old mistake, and record the failure it prevents.
 - A wasteful habit rather than a missing tool (polling instead of a background run, re-reading a whole file, a broad search where one grep would do): a rule in the narrowest home, phrased as the faster route, with the measured cost that justifies it.
 
 ## Step 5: write, deltas only
