@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261010-1 · 2026-10-10 · evergreen-wrapup asks what tool or check would have helped, and counts accuracy as a saving
+- because: the owner's request (the wrap-up should also look for scripts, processes and checks that are a net win for time, tokens or accuracy, not only friction the transcript shows)
+- files: skills/evergreen-wrapup/SKILL.md (Step 1 item 2, Step 4)
+- The harvest finds only friction that happened, so Step 1 now asks two hindsight questions: which script, flag, check or step would have made the session faster or cheaper from the start, and which wrong or nearly wrong result a check would have caught sooner. Step 4 takes those M candidates alongside R, S, T and E, and adds accuracy as a saving: a check where the work runs, proved by failing on the old mistake.
+
 ### C-20261008-2 · 2026-10-08 · evergreen-wrapup works in a desktop or web chat through a local connector
 - because: the owner's correction (plain desktop chat reaches local files and processes through connectors such as Desktop Commander, so the wrap-up should say how to work there instead of being written off)
 - files: skills/evergreen-wrapup/SKILL.md (Step 1)
