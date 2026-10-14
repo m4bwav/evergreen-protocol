@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261014-1 · 2026-10-14 · `save_state` keeps an existing evergreen.json's CRLF line endings
+- because: during a catalog refresh, `checked` and `tested` rewrote two CRLF evergreen.json files (in repos that keep CRLF) as LF, so a few changed lines showed as a whole-file diff and the refresh agents had to convert them back by hand
+- files: scripts/evergreen.py (save_state), scripts/test_evergreen.py (SaveState)
+- A new evergreen.json is still written with LF on every platform (L-020). When the file already exists with CRLF endings, `save_state` writes CRLF, so every command that records state (`checked`, `tested`, `claims`, `flag` and the rest) leaves the line endings as the repository has them. The new test failed before the change and passes after.
+
 ### C-20261013-1 · 2026-10-13 · `wrapup` harvests the calling session, not the newest transcript
 - because: a wrap-up run while another Claude Code session was busy harvested that other session (the newest transcript on disk), and a background agent's `<task-notification>` was counted as a user turn and listed as a correction
 - files: scripts/evergreen_wrapup.py (find_session, META_PREFIXES), scripts/test_evergreen.py (Wrapup)

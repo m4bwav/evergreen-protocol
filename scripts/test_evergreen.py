@@ -183,6 +183,20 @@ class IntervalRule(unittest.TestCase):
             self.assertEqual(st["interval_days"], 37.5)  # stored interval unjittered
 
 
+class SaveState(unittest.TestCase):
+    def test_new_file_is_lf_and_crlf_file_stays_crlf(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            eg.save_state(d, state())
+            raw = (d / "evergreen.json").read_bytes()
+            self.assertNotIn(b"\r", raw)
+            (d / "evergreen.json").write_bytes(raw.replace(b"\n", b"\r\n"))
+            eg.save_state(d, state("fast"))
+            raw = (d / "evergreen.json").read_bytes()
+            self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"))
+            self.assertEqual(json.loads(raw)["tier"], "fast")
+
+
 class Freshness(unittest.TestCase):
     def test_stale_and_fresh(self):
         st = state("fast", 14)
