@@ -2173,23 +2173,36 @@ class Wrapup(unittest.TestCase):
                 {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": True,
                                                           "content": "Permission for this action was denied by a rule."}]}},
                 {"type": "user", "isSidechain": True, "message": {"content": "no, never do that"}},
+                {"type": "user", "message": {"content": "<task-notification> agent finished; do not treat this as user input"}},
             ]
             f = proj / "abc123.jsonl"
             f.write_text("not json\n" + "".join(json.dumps(o) + "\n" for o in lines), encoding="utf-8")
-            old = os.environ.get("CLAUDE_CONFIG_DIR")
+            saved = {k: os.environ.get(k) for k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_SESSION_ID")}
             os.environ["CLAUDE_CONFIG_DIR"] = td
+            os.environ.pop("CLAUDE_CODE_SESSION_ID", None)
             try:
                 self.assertEqual(ewu.find_session("abc123"), f)
                 self.assertEqual(ewu.find_session(None), f)
+                # another session written later: the newest file is no longer ours, the session id still finds ours
+                other = proj / "zzz999.jsonl"
+                other.write_text(json.dumps(lines[0]) + "\n", encoding="utf-8")
+                os.utime(other, (f.stat().st_mtime + 60, f.stat().st_mtime + 60))
+                self.assertEqual(ewu.find_session(None), other)
+                os.environ["CLAUDE_CODE_SESSION_ID"] = "abc123"
+                self.assertEqual(ewu.find_session(None), f)
+                os.environ["CLAUDE_CODE_SESSION_ID"] = "gone"
+                self.assertEqual(ewu.find_session(None), other)
             finally:
-                if old is None:
-                    os.environ.pop("CLAUDE_CONFIG_DIR", None)
-                else:
-                    os.environ["CLAUDE_CONFIG_DIR"] = old
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
             h = ewu.harvest(f)
             self.assertEqual(len(h["denials"]), 1)
             self.assertEqual(h["errors"], [])
-            self.assertEqual(h["corrections"], [])  # sidechain turns are a subagent's, not the user's
+            self.assertEqual(h["corrections"], [])  # sidechain turns are a subagent's, task notifications the harness's
+            self.assertEqual(h["user_turns"], 1)
 
 
 if __name__ == "__main__":
