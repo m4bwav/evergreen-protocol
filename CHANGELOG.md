@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261013-1 · 2026-10-13 · `wrapup` harvests the calling session, not the newest transcript
+- because: a wrap-up run while another Claude Code session was busy harvested that other session (the newest transcript on disk), and a background agent's `<task-notification>` was counted as a user turn and listed as a correction
+- files: scripts/evergreen_wrapup.py (find_session, META_PREFIXES), scripts/test_evergreen.py (Wrapup)
+- With no `--session`, `wrapup` now reads `CLAUDE_CODE_SESSION_ID`, which Claude Code sets in its shells, and falls back to the newest transcript only when that is unset or has no file. Task notifications are skipped like other harness messages. The new test failed before the change and passes after; full suite 116 tests OK.
+
 ### C-20261011-1 · 2026-10-11 · Protocol 1.18, version 0.16.1: the subject track checks the official forums of the tools a unit depends on
 - because: the owner's request on 2026-10-11 (check the official forums of the tools a skill set uses), prompted by the Roblox plugin, where devforum.roblox.com announcements carried the DevEx rate changes and the Open Cloud limits before the docs reflected them
 - files: protocol/PROTOCOL.md (1.18; §4 Subject bullet, step 2), skills/evergreen-refresh/SKILL.md (Step 2), agents/evergreen-researcher.md (Method step 1, Subject), skills/evergreen-new/SKILL.md (Step 3, Fill RESEARCH.md), templates/RESEARCH.md.template (Search plan: Subject, Best sources), templates/MAINTENANCE.md.template (Refresh step 2), templates/MAINTENANCE-POINTER.md.template (Refresh), RESEARCH.md (Search plan: Subject), plugin.json and .claude-plugin/plugin.json (0.16.1)

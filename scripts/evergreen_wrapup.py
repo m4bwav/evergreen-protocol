@@ -40,7 +40,7 @@ CORRECTION_RE = re.compile(
     r"\bwrong\b|\binstead\b|\bdon'?t\b|\bdo not\b|\bnever\b|\balways\b|\bremember\b|\bagain\b|\bwhy did you\b|"
     r"\byou (forgot|missed|should|need to|didn'?t)\b|\bplease (don'?t|stop)\b|\bfrom now on\b|\bnext time\b)", re.I)
 DENIAL_RE = re.compile(r"(Permission for this action was denied|doesn'?t want to proceed|user rejected|was blocked by|denied by)", re.I)
-META_PREFIXES = ("<command-", "<local-command", "Caveat:", "<system-reminder>", "[Request interrupted")
+META_PREFIXES = ("<command-", "<local-command", "Caveat:", "<system-reminder>", "<task-notification>", "[Request interrupted")
 ERROR_WORD_RE = re.compile(r"(Error|Exception|error:|fatal:|denied|not found|not recognized|No such file|failed)", re.I)
 CMD_RE = re.compile(r"<command-name>/?([A-Za-z0-9:_-]+)</command-name>")
 SLOW_SECONDS = 60
@@ -58,8 +58,8 @@ def claude_dir() -> Path:
 
 
 def find_session(arg: str | None) -> Path | None:
-    """A path, a session id, or (none given) the most recently written top-level transcript, which during a session
-    is the session itself."""
+    """A path, a session id, or (none given) the calling session: Claude Code names it in CLAUDE_CODE_SESSION_ID.
+    Without that, the most recently written top-level transcript, which is wrong while another session is running."""
     if arg and Path(arg).is_file():
         return Path(arg)
     root = claude_dir() / "projects"
@@ -68,6 +68,10 @@ def find_session(arg: str | None) -> Path | None:
     if arg:
         hits = list(root.glob(f"*/{arg}.jsonl"))
         return hits[0] if hits else None
+    own = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    hits = list(root.glob(f"*/{own}.jsonl")) if own else []
+    if hits:
+        return hits[0]
     files = [p for p in root.glob("*/*.jsonl")]
     return max(files, key=lambda p: p.stat().st_mtime) if files else None
 
