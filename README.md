@@ -83,6 +83,7 @@ Store location: set `EVERGREEN_HOME` (environment variable) or `evergreen.config
 
 ```
 python scripts/evergreen.py audit --checks          # everything, with link and lint problems
+python scripts/evergreen.py audit --fetch           # also compare each clone with its remote default branch (behind-origin)
 python scripts/evergreen.py status <unit>           # one line
 python scripts/evergreen.py next <unit> --m 0.4     # dry-run the interval rule
 python scripts/evergreen.py checked <unit> --m 0.4 --note "what changed; cost: searches 6 · fetches 3 · tool calls 14"

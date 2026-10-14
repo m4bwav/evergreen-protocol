@@ -8,7 +8,7 @@ Commands
   home                              print EVERGREEN_HOME
   status  <unit>                    one-line freshness report
   contribute [yes|no|status]                      may this install open pull requests with its learnings? (asked once at install)
-  audit   [--brief] [--json] [--checks] [--roots P ...]   all known units
+  audit   [--brief] [--json] [--checks] [--fetch] [--roots P ...]   all known units
   next    <unit> --m 0.4            dry-run the interval rule
   checked <unit> --m 0.4 [--note ..] [--contradiction] [--use-time]
                                     record a refresh; compute next_due
@@ -226,6 +226,30 @@ def env_default() -> str:
             except Exception:
                 name = "unknown"
     return re.sub(r"[^A-Za-z0-9._-]+", "-", str(name)).strip("-") or "unknown"
+
+
+def neutral_env() -> str:
+    """Environment label for files that get published (tests.env in evergreen.json): EVERGREEN_ENV, else the config's
+    env_name, else the OS family. Never the hostname: through `tested` it reached public repositories."""
+    name = os.environ.get("EVERGREEN_ENV")
+    if not name:
+        try:
+            import evergreen_sync as es
+            name = es.per_os(es.notify_config().get("env_name"))
+        except Exception:
+            name = None
+    if not name:
+        name = {"win32": "windows", "darwin": "macos"}.get(sys.platform, "linux" if sys.platform.startswith("linux") else sys.platform)
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", str(name)).strip("-") or "unknown"
+
+
+def looks_like_hostname(name: str) -> bool:
+    """True for this machine's hostname or a default Windows one (DESKTOP-XXXXXXX), which must not be published."""
+    try:
+        here = re.sub(r"[^A-Za-z0-9._-]+", "-", socket.gethostname()).strip("-").lower()
+    except Exception:
+        here = ""
+    return bool(name) and (name.lower() == here or bool(re.fullmatch(r"(?:DESKTOP|LAPTOP|WIN)-[A-Z0-9]{5,}", name, flags=re.I)))
 
 
 def uses_path() -> Path:
@@ -742,6 +766,33 @@ def git(args: list[str], cwd: Path) -> str | None:
         return None
 
 
+def origin_state(d: Path, cache: dict) -> dict | None:
+    """The unit's evergreen.json on its remote's default branch, fetching each repository once per run (cache maps
+    the repository root to the ref, or None when it cannot be fetched). None when the unit is not in a git clone."""
+    top = git(["rev-parse", "--show-toplevel"], d)
+    if not top:
+        return None
+    if top not in cache:
+        ref = None
+        if git(["fetch", "-q", "origin"], Path(top)) is not None:
+            ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], Path(top))
+            for cand in ([ref] if ref else []) + ["origin/main", "origin/master"]:
+                if git(["rev-parse", "--verify", "-q", cand], Path(top)):
+                    ref = cand
+                    break
+            else:
+                ref = None
+        cache[top] = ref
+    ref, prefix = cache[top], git(["rev-parse", "--show-prefix"], d)
+    if not ref or prefix is None:
+        return None
+    txt = git(["show", f"{ref}:{prefix}evergreen.json"], Path(top))
+    try:
+        return json.loads(txt) if txt else None
+    except ValueError:
+        return None
+
+
 def map_slug(repo: Path) -> str:
     repo = repo.resolve()
     remote = git(["config", "--get", "remote.origin.url"], repo)
@@ -1001,6 +1052,10 @@ def lint(d: Path, st: dict) -> list[str]:
     if tests_apply(st):
         ev = d / "evals" / "evals.json"
         notes += evals_problems(ev) if ev.exists() else ["no evals/evals.json (PROTOCOL §11; run evergreen.py test-init)"]
+        env = str((st.get("tests") or {}).get("env") or "")
+        if looks_like_hostname(env):
+            notes.append(f"evergreen.json: tests.env '{env}' is a machine's hostname; replace it with a neutral name "
+                         "(dev-machine, windows) before the repository is published")
     tp = files.get("tests")
     if tp and tp.exists():
         txt = strip_comments(tp.read_text(encoding="utf-8", errors="replace"))
@@ -1285,10 +1340,9 @@ def entry_title(heading: str) -> str:
 # `command` evidence has no counterpart here and stays with the tester agent.
 
 READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Skill"]
+# Decoys get the trigger suffix too: a decoy told not to act passes without testing anything.
 TRIGGER_SUFFIX = ("(For this run: start the job, and stop after the first two or three tool calls with a one-line note of "
                   "which skill you invoked and what you would do next.)")
-DECOY_SUFFIX = ("(For this run: say in two or three lines how you would approach it and which tools or skills you would use; "
-                "do not carry it out.)")
 
 
 def _yaml_str(s: str) -> str:
@@ -1332,7 +1386,8 @@ def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]
             fields = [("type", "tool_used"), ("name", _yaml_str("evidence: " + str(ev["tool"]) + " called")), ("tool", str(ev["tool"]))]
             if ev.get("input_match"):
                 fields.append(("input_match", _yaml_str(ev["input_match"])))
-            graders["evidence.md"] = _grader(fields + [("min", "1"), ("arm", "both")])
+            bounds = [("min", str(int(ev.get("min", 1))))] + ([("max", str(int(ev["max"])))] if ev.get("max") is not None else [])
+            graders["evidence.md"] = _grader(fields + bounds + [("arm", "both")])
         elif t in ("file", "marker") and path and "<" not in path:
             graders["evidence.md"] = _grader([("type", "file_exists"), ("name", _yaml_str("evidence: " + path)), ("path", _yaml_str(path)),
                                               ("exists", "true"), ("arm", "both")])
@@ -1350,7 +1405,7 @@ def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]
     else:
         tools, turns, timeout = list(READ_ONLY_TOOLS), 8, 240
         if case.get("decoy"):
-            prompt += "\n\n" + DECOY_SUFFIX
+            prompt += "\n\n" + TRIGGER_SUFFIX
             graders["quiet.md"] = _grader([("type", "tool_used"), ("name", _yaml_str(f"{skill or 'the skill'} stays quiet")), ("tool", "Skill")]
                                           + ([("input_match", _yaml_str(skill_input_match(skill, exact=False)))] if skill else [])
                                           + [("min", "0"), ("max", "0"), ("arm", "both")])
@@ -1375,7 +1430,9 @@ def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]
                 graders["judge.md"] = _grader([("type", "llm"), ("name", _yaml_str("expectations"))],
                                               "PASS if the reply meets every one of these:\n" + "\n".join(f"- {j}" for j in judged)
                                               + "\nFAIL if any is missing or contradicted.")
-    head = f"---\nmax_turns: {turns}\ntimeout_seconds: {timeout}\nallowed_tools: [{', '.join(tools)}]\nruns: {runs}\n---\n\n"
+    banned = [str(x) for x in case.get("disallowed_tools") or []]  # Claude Code 2.1.299+; e.g. ["Agent"] keeps the work in the trace
+    head = (f"---\nmax_turns: {turns}\ntimeout_seconds: {timeout}\nallowed_tools: [{', '.join(tools)}]\n"
+            + (f"disallowed_tools: [{', '.join(banned)}]\n" if banned else "") + f"runs: {runs}\n---\n\n")
     return head + prompt + "\n", graders, notes
 
 
@@ -1690,6 +1747,7 @@ def cmd_audit(a):
     roots = [Path(r) for r in a.roots] if a.roots else default_roots()
     units = discover(roots, max_depth=2) if (getattr(a, "brief", False) and not a.roots) else discover(roots)  # hook: shallow walk, 15 s budget
     rows, stale, problems, failing, claim_units, consolidate_units = [], 0, 0, 0, 0, 0
+    fetched: dict = {}
     for d in sorted(units, key=lambda p: str(p).lower()):
         try:
             _, st = load_state(d)
@@ -1697,6 +1755,15 @@ def cmd_audit(a):
             rows.append({"path": str(d), "error": str(e)})
             continue
         fr = unit_flags(d, st, freshness(st))
+        if getattr(a, "fetch", False):
+            # a clone that is behind looks stale although the research was refreshed on another machine and merged
+            remote = origin_state(d, fetched)
+            if remote and str(remote.get("last_checked") or "") > str(st.get("last_checked") or ""):
+                rf = freshness(remote)
+                fr["flags"].append(f"behind-origin:{remote.get('last_checked')}")
+                if fr["status"] == "STALE" and rf["status"] != "STALE":
+                    fr["status"] = "behind"
+                    fr.pop("overdue_days", None)
         row = {"path": str(d), **fr, "source_state": source_state(d, st), "tests": st.get("tests")}
         if st.get("kind") == "map":
             dr = drift(st)
@@ -1978,7 +2045,7 @@ def cmd_tested(a):
     now = datetime.now()
     passed, failed = int(a.passed or 0), int(a.failed or 0)
     failing = [x.strip() for x in (a.failing or "").split(",") if x.strip()] if failed else []
-    t.update({"last_run": fmt_when(now, True), "harness": a.harness or t.get("harness"), "env": a.env or env_default(),
+    t.update({"last_run": fmt_when(now, True), "harness": a.harness or t.get("harness"), "env": a.env or neutral_env(),
               "cases": passed + failed, "passed": passed, "failed": failed, "failing": failing})
     if failed:
         t["last_failure"] = {"date": fmt_when(now), "note": a.note}
@@ -2223,7 +2290,9 @@ def main(argv=None):
     s = sp.add_parser("contribute", parents=[common], help="the install-time choice: may this install send its learnings upstream as pull requests? (yes|no|status)")
     s.add_argument("value", nargs="?", choices=["yes", "no", "status"]); s.set_defaults(fn=cmd_contribute)
     s = sp.add_parser("audit", parents=[common]); s.add_argument("--brief", action="store_true"); s.add_argument("--json", action="store_true")
-    s.add_argument("--checks", action="store_true", help="also run links + lint per unit"); s.add_argument("--roots", nargs="*"); s.set_defaults(fn=cmd_audit)
+    s.add_argument("--checks", action="store_true", help="also run links + lint per unit"); s.add_argument("--roots", nargs="*")
+    s.add_argument("--fetch", action="store_true", help="fetch each unit's clone and flag behind-origin when the default branch was refreshed later")
+    s.set_defaults(fn=cmd_audit)
     for name, fn in (("next", cmd_next), ("checked", cmd_checked)):
         s = sp.add_parser(name, parents=[common]); s.add_argument("unit"); s.add_argument("--m", type=float, default=None, help="change magnitude 0..1; omit for a failed refresh")
         s.add_argument("--note"); s.add_argument("--contradiction", action="store_true"); s.add_argument("--use-time", action="store_true")
@@ -2251,7 +2320,7 @@ def main(argv=None):
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_init)
     s = sp.add_parser("test-init", parents=[common], help="add TESTS.md, evals/evals.json and the tests block to an existing skill or plugin"); s.add_argument("unit"); s.set_defaults(fn=cmd_test_init)
     s = sp.add_parser("tested", parents=[common], help="record a suite run"); s.add_argument("unit"); s.add_argument("--passed", type=int, default=0); s.add_argument("--failed", type=int, default=0)
-    s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the hostname")
+    s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the config's env_name, else the OS family (never the hostname)")
     s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards"); s.set_defaults(fn=cmd_tested)
     s = sp.add_parser("eval-export", parents=[common], help="write `claude plugin eval` case folders (prompt.md + graders/) from evals/evals.json")
     s.add_argument("unit"); s.add_argument("--out", help="folder for the cases (default: <unit>/evals/cases)")
