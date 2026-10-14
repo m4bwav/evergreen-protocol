@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261014-4 · 2026-10-14 · LEARNINGS consolidation: 31 to 8 active
+- because: audit consolidate:31>25 (LEARNINGS.md also 253 lines, over the 200-line budget)
+- files: LEARNINGS.md, LEARNINGS-ARCHIVE.md (new), protocol/TESTING.md (§6), skills/evergreen-notify/SKILL.md (Step 3), CHANGELOG.md
+- Entry by entry. Merged: L-018 into L-013 (mail connector base64 limits and the Drive-picker route), L-031 into L-030 (an A/B run measuring its own harness). Retired, each with where its rule now lives: L-001, L-002, L-003, L-004, L-006, L-007, L-009, L-010, L-011, L-012, L-014, L-015, L-022, L-023, L-024, L-025, L-026, L-027, L-028, L-029. Promoted: L-019, folded into the TESTING.md §6 harness row (`*`-only `--case` patterns, `--allow-tools` as a global grant, the `claude-eval-*` temp cleanup, `worth --case` repeatable). Kept and tightened: L-005, L-008 (no private path), L-013, L-016, L-017 (Status line added), L-020, L-021, L-030. evergreen-notify cites L-013 where it cited L-018; older CHANGELOG and TESTS entries keep their IDs, which resolve through the linked archive. LEARNINGS.md 253 to 71 lines.
+
 ### C-20261014-2 · 2026-10-14 · No hostname in `tested`; decoys shaped like triggers; `audit --fetch`
 - because: `tested` wrote a machine's hostname into evergreen.json, which reached public repositories; `eval-export` decoys ended "do not carry it out" and so passed without testing anything, and a negative case's `max: 0` came out as `min: 1`; units refreshed on another machine showed STALE until their clones were pulled; `claude plugin eval` refused an eval directory inside `skills/`, and 2.1.299 added per-case `disallowed_tools`
 - files: scripts/evergreen.py (neutral_env, looks_like_hostname, lint, cmd_tested, export_case, origin_state, cmd_audit), scripts/test_evergreen.py (three tests), protocol/TESTING.md (harness table, evals.json fields), skills/evergreen-audit/SKILL.md (Step 1), README.md (Using the scripts)
