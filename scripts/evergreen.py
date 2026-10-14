@@ -174,7 +174,12 @@ def write_lf(p: Path, text: str) -> None:
 
 
 def save_state(d: Path, st: dict) -> None:
-    write_lf(d / "evergreen.json", json.dumps(st, indent=2, ensure_ascii=False) + "\n")
+    """New files get LF; an existing CRLF file keeps CRLF, so a check does not turn into a whole-file diff."""
+    p = d / "evergreen.json"
+    text = json.dumps(st, indent=2, ensure_ascii=False) + "\n"
+    if p.exists() and b"\r\n" in p.read_bytes():
+        text = text.replace("\n", "\r\n")
+    write_lf(p, text)
 
 
 def today() -> date:
