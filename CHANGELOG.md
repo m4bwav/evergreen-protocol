@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261014-2 · 2026-10-14 · No hostname in `tested`; decoys shaped like triggers; `audit --fetch`
+- because: `tested` wrote a machine's hostname into evergreen.json, which reached public repositories; `eval-export` decoys ended "do not carry it out" and so passed without testing anything, and a negative case's `max: 0` came out as `min: 1`; units refreshed on another machine showed STALE until their clones were pulled; `claude plugin eval` refused an eval directory inside `skills/`, and 2.1.299 added per-case `disallowed_tools`
+- files: scripts/evergreen.py (neutral_env, looks_like_hostname, lint, cmd_tested, export_case, origin_state, cmd_audit), scripts/test_evergreen.py (three tests), protocol/TESTING.md (harness table, evals.json fields), skills/evergreen-audit/SKILL.md (Step 1), README.md (Using the scripts)
+- `tested` without `--env` records EVERGREEN_ENV, else the config's env_name, else the OS family (`windows`, `macos`, `linux`), never the hostname; `--checks` flags a `tests.env` that is this machine's hostname or a default Windows one. `eval-export` gives decoys the trigger suffix, carries a trace evidence's `min` and `max`, and writes a case's `disallowed_tools`. `audit --fetch` fetches each clone once and marks a unit `behind` (flag `behind-origin:<date>`) when the default branch has a later `last_checked` that is not due. TESTING.md notes the `skills/` refusal (export with `--out`), the sandbox's LAN block and `disallowed_tools: [Agent]` for cases graded on the trace. Full suite 119 tests OK.
+
 ### C-20261014-1 · 2026-10-14 · `save_state` keeps an existing evergreen.json's CRLF line endings
 - because: during a catalog refresh, `checked` and `tested` rewrote two CRLF evergreen.json files (in repos that keep CRLF) as LF, so a few changed lines showed as a whole-file diff and the refresh agents had to convert them back by hand
 - files: scripts/evergreen.py (save_state), scripts/test_evergreen.py (SaveState)

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta
 from pathlib import Path
 for _k in ("CI", "DO_NOT_TRACK", "EVERGREEN_CONTRIBUTE"):  # the suite models a person's install; a CI runner would read as "contribute no"
@@ -562,6 +563,54 @@ class Scaffold(unittest.TestCase):
         self.assertIn("no test suite", capture(["test-init", str(dd)]))
         self.assertNotIn("tests", eg.load_state(dd)[1])
 
+    def test_tested_never_records_the_hostname_and_lint_flags_one(self):
+        import socket
+        d = Path(self.tmp.name) / "envrun"
+        eg.main(["init", str(d), "--name", "envrun", "--topic", "t", "--standalone", "--last-checked", "2026-09-01"])
+        old = os.environ.pop("EVERGREEN_ENV", None)
+        try:
+            with unittest.mock.patch("evergreen_sync.notify_config", return_value={}):
+                capture(["tested", str(d), "--passed", "1", "--failed", "0"])
+        finally:
+            if old is not None:
+                os.environ["EVERGREEN_ENV"] = old
+        _, st = eg.load_state(d)
+        self.assertIn(st["tests"]["env"], ("windows", "macos", "linux", sys.platform))
+        self.assertFalse(eg.looks_like_hostname(st["tests"]["env"]))
+        self.assertFalse(any("tests.env" in n for n in eg.lint(d, st)))
+        for leaked in (socket.gethostname(), "DESKTOP-ABC1234"):
+            st["tests"]["env"] = leaked
+            self.assertTrue(any("tests.env" in n and "hostname" in n for n in eg.lint(d, st)), leaked)
+
+    def test_audit_fetch_flags_a_clone_behind_origin(self):
+        root = Path(self.tmp.name) / "gitfetch"
+        remote, a, b = root / "remote.git", root / "a", root / "b"
+        root.mkdir()
+
+        def g(*args, cwd):
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args], cwd=str(cwd), check=True,
+                           capture_output=True)
+        g("init", "-q", "--bare", "-b", "main", str(remote), cwd=root)
+        g("clone", "-q", str(remote), str(a), cwd=root)
+        u = a / "skills" / "u"
+        eg.main(["init", str(u), "--name", "u", "--topic", "t", "--tier", "fast", "--standalone", "--last-checked", "2026-01-01"])
+        g("add", "-A", cwd=a)
+        g("commit", "-q", "-m", "old", cwd=a)
+        g("push", "-q", "origin", "HEAD:main", cwd=a)
+        g("clone", "-q", str(remote), str(b), cwd=root)
+        st = json.loads((b / "skills" / "u" / "evergreen.json").read_text(encoding="utf-8"))
+        st.update({"last_checked": eg.today().isoformat(), "next_due": (eg.today() + timedelta(days=5)).isoformat()})
+        (b / "skills" / "u" / "evergreen.json").write_text(json.dumps(st), encoding="utf-8")
+        g("commit", "-q", "-am", "refreshed elsewhere", cwd=b)
+        g("push", "-q", "origin", "HEAD:main", cwd=b)
+        plain = capture(["audit", "--roots", str(a)])
+        self.assertIn("STALE", plain)
+        out = capture(["audit", "--fetch", "--roots", str(a)])
+        self.assertIn("behind-origin:" + eg.today().isoformat(), out)
+        self.assertNotIn("STALE", out)
+        self.assertIn(" behind", out)
+        self.assertEqual(eg.origin_state(Path(self.tmp.name), {}), None)  # not a clone
+
     def test_tested_records_the_run_and_names_the_next_entry(self):
         d = Path(self.tmp.name) / "run"
         eg.main(["init", str(d), "--name", "run", "--topic", "t", "--tier", "moderate", "--standalone", "--last-checked", "2026-09-01"])
@@ -905,12 +954,14 @@ class Scaffold(unittest.TestCase):
                                                                                                  "or": {"type": "file", "path": "out.png"}}},
             {"id": "action-2", "kind": "action", "prompt": "Write the report", "evidence": {"type": "file", "path": "report.md"}},
             {"id": "action-3", "kind": "action", "prompt": "Check the queue", "evidence": {"type": "command", "run": "curl x", "expect": "ok"}},
+            {"id": "negative-1", "kind": "action", "prompt": "Write a commit message", "disallowed_tools": ["Agent"],
+             "evidence": {"type": "trace", "tool": "Bash", "input_match": "render\\.py", "min": 0, "max": 0}},
             {"id": "outcome-1", "kind": "outcome", "prompt": "What passes a test?", "expectations": ["names evidence outside the transcript",
                                                                                                     "regex on the answer: (evidence|trace).*(never|not)"]},
         ]}
         (d / "evals" / "evals.json").write_text(json.dumps(suite), encoding="utf-8")
         out = capture(["eval-export", str(d)])
-        self.assertIn("wrote 6 case folder(s)", out)
+        self.assertIn("wrote 7 case folder(s)", out)
         self.assertIn("action-3: evidence type command has no plugin-eval grader", out)
         self.assertIn("action-1: the alternative evidence (file) is not exported", out)
         cases = d / "evals" / "cases"
@@ -922,6 +973,14 @@ class Scaffold(unittest.TestCase):
         quiet = (cases / "decoy-1" / "graders" / "quiet.md").read_text(encoding="utf-8")
         self.assertIn("min: 0\nmax: 0\narm: both\n", quiet)
         self.assertIn("(?:[\\w-]+:)?exp-skill'", quiet)  # a prefix: every skill of that name family stays quiet
+        # a decoy has the trigger's shape; one told not to act would pass without testing anything
+        dp = (cases / "decoy-1" / "prompt.md").read_text(encoding="utf-8")
+        self.assertTrue(dp.endswith(eg.TRIGGER_SUFFIX + "\n"))
+        self.assertNotIn("do not carry it out", dp)
+        # a case's max survives the export, and disallowed_tools reaches the front matter
+        self.assertIn("min: 0\nmax: 0\narm: both\n", (cases / "negative-1" / "graders" / "evidence.md").read_text(encoding="utf-8"))
+        self.assertIn("disallowed_tools: [Agent]\nruns: 3\n", (cases / "negative-1" / "prompt.md").read_text(encoding="utf-8"))
+        self.assertNotIn("disallowed_tools", (cases / "action-1" / "prompt.md").read_text(encoding="utf-8"))
         self.assertIn("allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]", (cases / "action-1" / "prompt.md").read_text(encoding="utf-8"))
         self.assertIn("tool: Bash\ninput_match: 'ssh\\s+mac'\nmin: 1", (cases / "action-1" / "graders" / "evidence.md").read_text(encoding="utf-8"))
         self.assertIn("type: file_exists\n", (cases / "action-2" / "graders" / "evidence.md").read_text(encoding="utf-8"))
@@ -931,7 +990,7 @@ class Scaffold(unittest.TestCase):
         self.assertNotIn(b"\r", (cases / "outcome-1" / "graders" / "judge.md").read_bytes())
         # hand-tuned folders are kept unless --force
         (cases / "trigger-1" / "prompt.md").write_text("tuned by hand\n", encoding="utf-8")
-        self.assertIn("kept 6 existing", capture(["eval-export", str(d)]))
+        self.assertIn("kept 7 existing", capture(["eval-export", str(d)]))
         self.assertEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
         capture(["eval-export", str(d), "--force"])
         self.assertNotEqual((cases / "trigger-1" / "prompt.md").read_text(encoding="utf-8"), "tuned by hand\n")
