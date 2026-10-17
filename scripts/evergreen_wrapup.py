@@ -7,7 +7,8 @@ session's transcript (Claude Code's JSONL, an internal format: unknown lines are
 wrap-up turns into durable improvements, each with an ID the agent cites while it gates and routes them
 (skills/evergreen-wrapup):
 
-  C  corrections   user turns after the first that read as a correction, a restated rule, or a preference
+  C  corrections   user turns after the first that read as a correction, a restated rule, or a preference,
+                  and every message typed mid-turn (queued while the agent worked)
   D  denials       tool calls the user or a permission rule refused (a preference, or a route to avoid)
   E  errors        failed tool calls grouped by tool and first line, with how often and whether a retry followed
   R  repeats       shell command shapes run three or more times (script or alias candidates), exact repeats twice
@@ -40,7 +41,8 @@ CORRECTION_RE = re.compile(
     r"\bwrong\b|\binstead\b|\bdon'?t\b|\bdo not\b|\bnever\b|\balways\b|\bremember\b|\bagain\b|\bwhy did you\b|"
     r"\byou (forgot|missed|should|need to|didn'?t)\b|\bplease (don'?t|stop)\b|\bfrom now on\b|\bnext time\b)", re.I)
 DENIAL_RE = re.compile(r"(Permission for this action was denied|doesn'?t want to proceed|user rejected|was blocked by|denied by)", re.I)
-META_PREFIXES = ("<command-", "<local-command", "Caveat:", "<system-reminder>", "<task-notification>", "[Request interrupted")
+HARNESS_TAG_RE = re.compile(r"<[a-z][a-z0-9_-]*>")  # a part opening with a tag is harness text, not typed words
+META_PREFIXES = ("<command-","<local-command", "Caveat:", "<system-reminder>", "<task-notification>", "[Request interrupted")
 ERROR_WORD_RE = re.compile(r"(Error|Exception|error:|fatal:|denied|not found|not recognized|No such file|failed)", re.I)
 CMD_RE = re.compile(r"<command-name>/?([A-Za-z0-9:_-]+)</command-name>")
 SLOW_SECONDS = 60
@@ -205,6 +207,19 @@ def harvest(path: Path, top: int = 8) -> dict:
                         web.append("fetch: " + str(inp.get("url", ""))[:100])
                     elif name in ("Agent", "Task"):
                         agents.append(str(inp.get("description") or inp.get("subagent_type") or "")[:80])
+            elif o.get("type") == "attachment" and isinstance(o.get("attachment"), dict):
+                # a message the user typed while the agent was working (Claude Code: a queued_command attachment
+                # absorbed mid-turn); it is nearly always steering, so it is a correction candidate whatever its words
+                a = o["attachment"]
+                if a.get("type") == "queued_command" and (a.get("origin") or {}).get("kind", "human") == "human":
+                    prompt = a.get("prompt")
+                    parts = prompt if isinstance(prompt, list) else [prompt]
+                    # the harness can prepend a tagged block (<browser_instruction>...) to the user's words
+                    text = "\n".join(t for t in (_text([p] if isinstance(p, dict) else p).strip() for p in parts)
+                                     if t and not t.startswith(META_PREFIXES) and not HARNESS_TAG_RE.match(t)).strip()
+                    if text:
+                        user_turns += 1
+                        corrections.append("[mid-turn] " + re.sub(r"\s+", " ", text)[:220])
             elif o.get("type") == "user":
                 if isinstance(content, list) and any(isinstance(c, dict) and c.get("type") == "tool_result" for c in content):
                     for c in content:

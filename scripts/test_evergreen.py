@@ -2278,5 +2278,24 @@ class Wrapup(unittest.TestCase):
             self.assertEqual(h["user_turns"], 1)
 
 
+    def test_messages_typed_mid_turn_are_user_turns_and_correction_candidates(self):
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "s.jsonl"
+            q = lambda text, kind="human": {"type": "attachment", "attachment": {
+                "type": "queued_command", "prompt": [{"type": "text", "text": text}], "origin": {"kind": kind}}}
+            lines = [{"type": "user", "message": {"content": "render the brawl"}},
+                     q("the right leg should be black like the other one"),   # no correction keyword at all
+                     {"type": "attachment", "attachment": {"type": "queued_command", "origin": {"kind": "human"}, "prompt": [
+                         {"type": "text", "text": "<browser_instruction># Browser tools ...</browser_instruction>"},
+                         {"type": "text", "text": "also get rid of the grey thing"}]}},   # a harness block rides along
+                     q("<task-notification> done"),                          # harness text, not the user
+                     q("ran by a hook", kind="hook"),
+                     {"type": "queue-operation", "operation": "remove", "content": "the right leg should be black"}]
+            f.write_text("".join(json.dumps(o) + "\n" for o in lines), encoding="utf-8")
+            h = ewu.harvest(f)
+            self.assertEqual(h["user_turns"], 3)
+            self.assertEqual(h["corrections"], ["[mid-turn] the right leg should be black like the other one",
+                                                "[mid-turn] also get rid of the grey thing"])
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
