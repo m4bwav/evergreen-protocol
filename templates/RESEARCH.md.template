@@ -55,8 +55,8 @@ Best sources (primary first): <official docs / changelog / official forums of th
 
 Newest first. One entry per material finding; a quiet refresh gets one entry saying so. `Track` is subject, tooling, practice, or testing.
 
-### R-{{DATEID}}-1 · {{DATE}} · Initial research
-- Summary: <what was found and why it matters for the main file; say which tracks were searched and what the tooling and testing tracks turned up, even if nothing>
+### R-{{DATEID}}-1 · {{DATE}} · Creation pass
+- Summary: <the state of the art on the day the unit was made (PROTOCOL §8: every track, at least five queries each, eight or more pages): what was found and why it matters for the main file; what the tooling and testing tracks turned up, even if nothing; one further R- entry per material finding, practice lessons included; cost: searches n · fetches n · tool calls n>
 - Track: subject
 - Sources: <url>, <url>
 - Magnitude: n/a (initial)
