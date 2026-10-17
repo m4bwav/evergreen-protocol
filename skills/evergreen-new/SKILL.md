@@ -15,7 +15,7 @@ Read `<plugin root>/evergreen.json`. If `contradiction` is set or today is on or
 
 ## Step 1: confirm the default
 
-If the user said "plain skill", "no maintenance", "one-off", or the topic has nothing to research and nothing to learn, build a normal skill and stop here. Otherwise proceed; mention in one line that the skill will be evergreen (tier and interval) so the user can object.
+If the user said "plain skill", "no maintenance", "one-off", or the topic has nothing to research and nothing to learn, build a normal skill and stop here. Otherwise proceed; mention in one line that the skill will be evergreen (tier and interval) and that it starts with a deep research pass, so the user can object.
 
 ## Step 2: design the skill
 
@@ -26,7 +26,14 @@ While designing, separate two lists:
 - Time-sensitive claims: anything that could change on the web (tool versions, APIs, prices, policies, best practices, model behavior). These become the subject track of the search plan and set the tier.
 - Procedure and preference: how the user wants the work done. These are learnings material and, if fixed, go straight into the body.
 
-Then run the tooling track before writing the body (PROTOCOL §4 and §8): GitHub code search `path:SKILL.md "<topic>"`, skills.sh or `npx skills@1.7.0 find "<topic>"`, the MCP registry search, `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`. If a well-used, maintained skill, plugin or server already does the job, the new skill builds on it or points at it instead of re-implementing it; tell the user what was found and let them decide before installing anything. Add one or two practice queries (how others use AI agents on this goal) and one or two testing queries (what evidence shows this job was done, what checker or harness others use for it) so the plan has all four tracks from day one.
+Then run the creation pass before writing the body (PROTOCOL §8): a deep web research run on all four tracks, whatever the tier, so the skill starts at the state of the art and never has to be taught a lesson the field already learned. Launch `evergreen-researcher` in creation mode, one pass per track or pair of tracks in parallel, each given the topic, the draft's time-sensitive claims and the track's queries from the RESEARCH template; with no subagents, run the same searches inline. At least five queries per track and eight or more fetched pages in all:
+
+- Subject: official docs, changelogs, standards, key papers and reference works, the official forums of each tool the skill depends on; the current best way to do the job and what changed this year.
+- Tooling: GitHub code search `path:SKILL.md "<topic>"`, skills.sh or `npx skills@1.7.0 find "<topic>"`, the MCP registry, Anthropic's plugin catalogs, `"<topic>" skill OR plugin OR "mcp server" <year> site:github.com`; read the top one to three candidates in full (SKILL.md, scripts, evals, open issues). If a well-used, maintained one already does the job, the new skill builds on it or points at it; tell the user what was found and let them decide before installing anything.
+- Practice: how people use AI agents on this goal and what they learned the hard way: workflows, prompts, pitfalls, failure reports in the top tools' issue trackers, forum and subreddit threads, Hacker News, dated case studies. Each lesson that changes how the work should be done becomes a step or a guard in the body, with its `R-` finding as the source.
+- Testing: what evidence shows this job was done and what checkers or harnesses others use, so the first cases use them.
+
+Without web access, say so, build the draft, and leave `next_due` at today so the first use runs the pass; never hand over a skill researched from model knowledge alone as finished.
 
 Write the core action step so it leaves evidence: name the file, tool call, or record it produces and make the step confirm it before reporting done. A step that can only be checked by reading the reply cannot be tested and will fail the suite as a no-op.
 
@@ -47,7 +54,7 @@ Skills inside the plugin, or in a repo that vendors the plugin under `.agents/`,
 
 A skill that needs anything outside itself (a tool, a package, a key, a server, a model, an MCP server, an account) gets `SETUP.md` now: `EG setup <skill-dir> --init`, one Needs row per dependency with what it is for and its fallback, recipes only where the shared book (`setup/RECIPES.md`) does not cover it, a link from SKILL.md's Step 0, then `EG setup <skill-dir> --log` once the check passes here (PROTOCOL.md §12, `evergreen-setup`).
 
-Fill RESEARCH.md properly: Current understanding (what the skill asserts and how confident you are, including what tooling exists for the subject), Search plan in its four tracks (subject: the time-sensitive claims as queries with primary sources, plus the official forum of each tool, platform or vendor the skill depends on, with its URL and announcements category, such as devforum.roblox.com for a Roblox skill or discussions.unity.com for Unity; tooling, practice and testing: the template's queries with `<topic>` filled in and anything better found today), and an `R-` entry per track recording what today's research found, a one-liner when a track was quiet. If the skill was written from model knowledge without a web check, say so in the `R-` entry and set `--last-checked` to today anyway; the first refresh will do the verification. For `fast` and `live` topics, do the web check now: model knowledge is almost always stale there.
+Fill RESEARCH.md properly: Current understanding (what the skill asserts and how confident you are, including what tooling exists for the subject), Search plan in its four tracks (subject: the time-sensitive claims as queries with primary sources, plus the official forum of each tool, platform or vendor the skill depends on, with its URL and announcements category, such as devforum.roblox.com for a Roblox skill or discussions.unity.com for Unity; tooling, practice and testing: the template's queries with `<topic>` filled in and anything better found today), and the creation pass's findings as `R-` entries (one per material finding, at least one per track, a one-liner when a track was quiet), the first of them carrying the pass's cost line. Search plan queries that worked in the creation pass replace the template's generic ones.
 
 ## Step 4: prove it, then hand over
 
@@ -55,7 +62,13 @@ Worth first (`evergreen-worth`, TESTING.md §8): `EG worth <skill-dir>` on the d
 
 With an action or outcome case run under `claude plugin eval`, read the A/B with `EG worth <skill-dir> --record` and hand over its verdict; a CUT goes to the user as a recommendation not to keep the skill.
 
-Tell the user: skill name, where it lives, tier and next due date, the test result (passed/total by kind, any case still failing and why), the worth verdict, and that it will announce when it is due or has a failing test and act after the task. A skill is never handed over on the strength of its description alone.
+## Step 5: launch-ready (units with their own repository)
+
+A skill set or plugin that gets its own repository ships with the launch set of PROTOCOL §8: the owner's repository conventions first (from their profile or agent instructions), else a README that opens with a hero image (use an installed image-generation skill), install and quick-start sections, LICENSE, SECURITY.md, CI running the unit's checks, AGENTS.md and CLAUDE.md pointers, description and topics, and a GitHub wiki (use an installed wiki skill; the first wiki page must be saved in the web interface before a push works, so name that step when it is owed). Check each item off or list it as owed.
+
+## Hand-over
+
+Tell the user: skill name, where it lives, tier and next due date, what the creation pass found (its cost line, the tools it builds on or points at, the two or three practice lessons that shaped the body), the test result (passed/total by kind, any case still failing and why), the worth verdict, the launch set's status when there is a repository, and that it will announce when it is due or has a failing test and act after the task. A skill is never handed over on the strength of its description alone.
 
 ## Placing it
 

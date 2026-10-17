@@ -17,7 +17,7 @@ This plugin is its own first unit: see [RESEARCH.md](RESEARCH.md) for the eviden
 | `skills/evergreen-wrapup` | End-of-session wrap-up: harvest the session transcript (`evergreen.py wrapup`: corrections, refused calls, errors, repeated commands, token sinks, slow calls, files and stores touched, and notes or vaults outside any repository that the session used), drop what fails a four-question usefulness gate, send each survivor to its narrowest home through the skill that owns it (or straight into a knowledge base no skill owns, when the session makes clear which), and fix the scripts and habits that cost the most time or tokens. |
 | `skills/evergreen-map` | Build and update the plugin's own codemap of any repo you explore. |
 | `skills/evergreen-convert` | Make an existing skill or doc evergreen without rewriting it; skills get a test suite scaffolded. |
-| `skills/evergreen-new` | Create new skills evergreen by default, handed over only with a run suite. |
+| `skills/evergreen-new` | Create new skills evergreen by default: a deep creation research pass on all four tracks first, handed over only with a run suite and, when the unit has its own repository, launch-ready (hero image, wiki, SECURITY.md, CI). |
 | `skills/evergreen-test` | Write and run a skill's eval suite: trigger prompts and decoys, action cases proven by evidence outside the transcript, outcome cases, baseline without the skill. |
 | `skills/evergreen-tune` | Fix a skill that failed a test or failed in use: reproduce, classify, learn, research if stale, smallest edit, re-run. Three iterations, then report. |
 | `skills/evergreen-worth` | Is a skill worth its tokens? Warns while a skill is made or changed when it reads as mostly cost (general advice the model already follows, bloat, repeats, a near copy of another skill, an edit that added little that is specific), then decides KEEP, TRIM or CUT from the with-versus-without A/B. |
@@ -128,7 +128,7 @@ Run the script by absolute path; the shell's working directory is usually your p
 ## Making things evergreen
 
 - An existing skill: say "make X self-maintaining" (`evergreen-convert`). It adds the companions, migrates any hand-rolled refresh state, appends the Step 0 and Maintenance sections, and registers the unit. Skills outside the plugin point at it (`protocol: "plugin"`, a short `MAINTENANCE.md` that says where to look), so a protocol update never means editing every skill; only skills that travel to machines without the plugin get the full self-contained copy.
-- A new skill: just ask for a skill; `evergreen-new` makes it evergreen unless you say "plain skill", and hands it over with its suite run.
+- A new skill: just ask for a skill; `evergreen-new` makes it evergreen unless you say "plain skill", starts it with a deep research pass on the state of the art (subject, tools built for it, how people use agents on it and what they learned, how the work is checked), and hands it over with its suite run.
 - A skill that misbehaves: say what it did not do ("the delegation skill never delegated"); `evergreen-tune` reproduces it in a fresh context, classifies the failure, researches the subject's testing and tooling if the unit is stale, fixes, and re-runs. "Test this skill" or "prove X works" runs `evergreen-test`.
 - A repo: paste the `AGENTS.md` snippet; docs and codemaps in `docs/` can carry their own `evergreen.json` and `MAINTENANCE.md`.
 - A knowledge doc: `evergreen.py init <dir> --kind doc --main <file>.md ...`.

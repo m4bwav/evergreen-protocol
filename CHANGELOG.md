@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261017-2 · 2026-10-17 · Protocol 1.19, 0.17.0: deep creation pass for every new unit; launch-ready repositories
+- because: a new unit could be written from model knowledge with only the tooling track searched, the web check deferred to the first refresh unless the tier was fast or live, so lessons practitioners had already published reached the unit only when a user taught them months later; and nothing told evergreen-new that a unit with its own repository needs a hero image, a wiki and the rest of a launch set, so plugins shipped without them
+- files: protocol/PROTOCOL.md (§8, version), skills/evergreen-new/SKILL.md (Steps 1 to 3, new Step 5, Hand-over), agents/evergreen-researcher.md (creation mode), templates/RESEARCH.md.template (first R- entry), README.md, plugin.json, .claude-plugin/plugin.json
+- The first research pass is now the creation pass, expansive whatever the tier: all four tracks on the web before the body is written, at least five queries per track and eight or more fetched pages, the top tooling candidates read in full, and the practice track mined for pitfalls and failure reports that become steps or guards in the body. Parallel `evergreen-researcher` passes in a new creation mode run it. Without web access the unit is created due today so its first use runs the pass. A unit with its own repository is handed over with the owner's repository conventions or the default launch set (README hero image, install and quick start, LICENSE, SECURITY.md, CI, pointer files, description and topics, GitHub wiki), each item checked off or named as owed.
+
 ### C-20261017-1 · 2026-10-17 · `wrapup` harvests messages typed mid-turn as correction candidates
 - because: a session whose three corrections were all typed while the agent worked harvested 0 corrections and 1 user turn; Claude Code stores such a message as an `attachment` record (`queued_command`, origin `human`), which the harvester never read, and none of the three used a word the correction pattern knows
 - files: scripts/evergreen_wrapup.py (harvest, HARNESS_TAG_RE, module docstring), scripts/test_evergreen.py (Wrapup: mid-turn messages)
