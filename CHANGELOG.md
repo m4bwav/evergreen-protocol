@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261017-1 · 2026-10-17 · `wrapup` harvests messages typed mid-turn as correction candidates
+- because: a session whose three corrections were all typed while the agent worked harvested 0 corrections and 1 user turn; Claude Code stores such a message as an `attachment` record (`queued_command`, origin `human`), which the harvester never read, and none of the three used a word the correction pattern knows
+- files: scripts/evergreen_wrapup.py (harvest, HARNESS_TAG_RE, module docstring), scripts/test_evergreen.py (Wrapup: mid-turn messages)
+- Each mid-turn message from the user now counts as a user turn and is listed under C as `[mid-turn] ...` whatever its words, since a message sent mid-task is nearly always steering; a tagged harness block that rides along in the same message (`<browser_instruction>`) is dropped, as are hook-sent ones. Measured on the session: 0 corrections before, 4 after, the 4 the user typed.
+
 ### C-20261014-4 · 2026-10-14 · LEARNINGS consolidation: 31 to 8 active
 - because: audit consolidate:31>25 (LEARNINGS.md also 253 lines, over the 200-line budget)
 - files: LEARNINGS.md, LEARNINGS-ARCHIVE.md (new), protocol/TESTING.md (§6), skills/evergreen-notify/SKILL.md (Step 3), CHANGELOG.md
