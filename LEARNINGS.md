@@ -6,6 +6,22 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-032 · 2026-10-23 · A judge's wording is part of the judge; calibrate on a random sample, never one picked by verdict (`judge-wording-and-random-labels`)
+- Trigger: 2026-10-23. 1,109 `llm` verdicts from 104 graders in six repositories' plugin-eval results: three votes split on 5%, and graders packing four or more criteria split no more often (3.8%) than single-criterion ones (6.3%). Re-judging eight replies the harness judge had failed unanimously, the same model (Sonnet) with the same criteria in a differently worded prompt gave 12 PASS votes of 24. Blind labels on those eight agreed with the harness on 6 and with the re-worded judge on 5; the harness's kappa there was 0 by construction, since it had failed all eight. A random 20 of this plugin's own verdicts, labelled blind, agreed 20 of 20 (kappa 1.00).
+- Hypothesis: a judge prompt is an instrument; its framing moves borderline verdicts as much as the criteria do. A sample chosen by verdict holds one answer from the judge, so agreement there measures the labeller's base rate, not the judge.
+- Rule: calibrate a judge with `judge-sample` (random, verdicts hidden) and `judge-agree`; treat a new grader text, judge model or harness version as a new judge; record all three in the T- entry. Keep one judge per case with its criteria listed: splitting criteria into separate graders bought no stability here.
+- Evidence: C-20261023-1; `judge_sample`, `judge_agree`, `kappa`; test `test_judge_sample_hides_verdicts_and_agree_measures_kappa`
+- Scope: plugin (TESTING.md §7; evergreen-test)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-10-23
+
+### L-033 · 2026-10-23 · Padding a reply did not buy a pass; a test of it must keep the reply's required ending (`length-bias-padding-test`)
+- Trigger: 2026-10-23. Eight real failing replies doubled with filler: 12 PASS votes of 24 before, 9 after, 6 with the length rule added to the prompt. Six real passes with the rule: 16 of 18 before, 15 after, no majority changed. Three of the eight (legal answers) had to end with a set line; the filler pushed it off the end and those turned to FAIL for that reason, not for length.
+- Hypothesis: on short checkable criteria a current judge does not reward length; a long reply still looks better to it when the length carries real coverage, which no padding test can separate from merit.
+- Rule: keep the "length is not a criterion" line as a free guard but do not claim it fixes a bias that was not measured; to test length bias, pad in the middle of a reply, never after a required last line.
+- Evidence: C-20261023-1 (JUDGE_RULE); test `test_judge_graders_get_the_length_rule_and_a_reference`
+- Scope: plugin (TESTING.md §7)
+- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-10-23
+
 ### L-030 · 2026-10-01 · An A/B run can measure its own harness; prove the checker and read the init event before trusting a number (`ab-paths-absolute-check-init`)
 - Trigger: obsidian-notes on 2026-10-01. `worth skills/obsidian-notes --ab` with a relative path spent $1.67 on 6 runs that measured the harness: `--plugin-dir .` named each run folder, the with arm never loaded the skill, its writes were refused as sensitive plugin files, and a relative checker path graded three correct baseline vaults 0 of 3, which the report turned into mode 4 "worse at 1.39x the cost". Writing the result-graded cases the same day hit five more traps that would each have spent runs measuring nothing (merged from L-031): outcome cases whose default tools cannot edit a file, `redundant: true` hiding a case and reporting mode 2, a `check` behind a `path` a right answer may never write, answer regexes ignored in cases with `evidence`, and an `evals.json` broken by halved heredoc backslashes that `worth` read as "0 value cases"
 - Hypothesis: the runner was tested from inside the skill folder, where relative and absolute paths coincide, and the case format grew for `claude plugin eval` and the tester agent while `--ab` read some fields differently; nothing checked a suite or an arm's loaded skills before the money was spent

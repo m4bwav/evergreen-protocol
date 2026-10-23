@@ -388,6 +388,8 @@
       "kind": "outcome",
       "skill": "evergreen-tune",
       "fixture": "tune-holdout",
+      "tools": ["Edit", "Bash"],
+      "max_turns": 25,
       "prompt": "outcome-1 of the skill in <fixture>/unit-converter keeps failing (see its TESTS.md). Tune it: make the edit, but don't run any evals. Then tell me which of its eval cases you looked at before editing and which you would run afterwards.",
       "expectations": [
         "the agent fixes the mile factor in SKILL.md",

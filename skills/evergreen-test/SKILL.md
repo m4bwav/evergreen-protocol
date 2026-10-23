@@ -1,6 +1,6 @@
 ---
 name: evergreen-test
-description: "Write and run the eval suite that proves a skill or plugin works: trigger prompts and decoys, action cases proven by evidence outside the transcript (a tool call in the trace, a file, a marker, a remote record), outcome cases, and a baseline without the skill. Use when a skill has just been written (with evergreen-new or skill-creator), after a refresh or a tune edited a skill, on 'test this skill', 'does X actually trigger', 'run the evals', 'prove X works', 'regression test the skills', 'write tests for X', or when the audit lists untested or overdue units. When a case fails, hand over to evergreen-tune. Not for testing application code; that is the repo's own test suite."
+description: "Write and run the eval suite that proves a skill or plugin works: trigger prompts and decoys, action cases proven by evidence outside the transcript (a tool call in the trace, a file, a marker, a remote record), outcome cases, and a baseline without the skill. Use when a skill has just been written (with evergreen-new or skill-creator), after a refresh or a tune edited a skill, on 'test this skill', 'does X actually trigger', 'run the evals', 'prove X works', 'regression test the skills', 'write tests for X', 'can I trust the llm judge', 'calibrate the grader', or when the audit lists untested or overdue units. When a case fails, hand over to evergreen-tune. Not for testing application code; that is the repo's own test suite."
 ---
 
 # Evergreen test
