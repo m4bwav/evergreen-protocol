@@ -92,21 +92,26 @@
     }
   ],
   "counts": {
-    "learnings": 24,
-    "changes": 40,
+    "learnings": 25,
+    "changes": 41,
     "research": 58,
-    "tests": 7
+    "tests": 8
   },
   "consolidate_every": 25,
   "tests": {
-    "last_run": "2026-10-08T14:03",
-    "harness": "claude plugin eval 2.1.292 (trigger-12, trigger-13, decoy-7); worth --ab outcome-3, action-5, action-6 (sonnet); scripts/test_evergreen.py",
+    "last_run": "2026-10-23T10:38",
+    "harness": "worth --ab + claude plugin eval 2.1.307",
     "env": "owner-pc",
-    "cases": 6,
-    "passed": 6,
-    "failed": 0,
-    "failing": [],
-    "last_failure": null,
+    "cases": 10,
+    "passed": 9,
+    "failed": 1,
+    "failing": [
+      "action-7"
+    ],
+    "last_failure": {
+      "date": "2026-10-23",
+      "note": "action-7 2/3 (undertrigger 1 of 3); outcome-4 redundant; trigger-2 3/3; decoys 7/7"
+    },
     "research_after_days": null
   },
   "setup": {

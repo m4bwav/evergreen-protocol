@@ -381,7 +381,8 @@
         "tool": "Bash",
         "input_match": "evergreen\\.py(?:\\\\?\")?\\s+judge-sample"
       },
-      "runs": 3
+      "runs": 3,
+      "baseline": "2026-10-23 worth --ab (sonnet): without the skill 0 of 3 passed (each wrote its own labelling scripts); with it 2 of 3, the third never loaded the skill (T-20261023-1)"
     },
     {
       "id": "outcome-4",
@@ -401,7 +402,9 @@
         "path": "<fixture>/unit-converter/SKILL.md",
         "match": "1\\.609"
       },
-      "runs": 3
+      "runs": 3,
+      "redundant": true,
+      "baseline": "2026-10-23 worth --ab (sonnet): without the skill 3 of 3 passed (the fixture's \"holdout\": true is enough of a hint); with it 3 of 3, and evergreen-tune never fired (T-20261023-1)"
     }
   ]
 }
