@@ -57,11 +57,11 @@ A failure that does not reproduce in three runs is `flaky`: record the traces in
 - `environment`: a precondition check at the top of the skill (what to verify, what to tell the user when it fails) plus the profile learning from Step 3.
 - `harness`: fix the case, not the skill.
 
-Edit in place, delta only. One class, one edit, then re-run; do not stack fixes before measuring.
+Edit in place, delta only. One class, one edit, then re-run; do not stack fixes before measuring. Never open a case marked `"holdout": true` (prompt, graders or fixture) before the edit is made: an edit chosen while reading every case can fit those cases and nothing else.
 
 ## Step 6: re-run and record
 
-The failing case three times, then the whole suite (`evergreen-test` Step 3). Then:
+The failing case three times, then the whole suite (`evergreen-test` Step 3), held-out cases included. A held-out case that passed before the edit and fails after it means the edit fit the cases you read: undo it and try a more general one. Then:
 
 ```
 EG tested <unit> --passed N --failed M [--failing ids] --harness <name> --note "<class: what changed>"

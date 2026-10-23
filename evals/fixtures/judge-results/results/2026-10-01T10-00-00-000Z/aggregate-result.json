@@ -1,0 +1,433 @@
+{
+ "schemaVersion": 1,
+ "claudeVersion": "2.1.300",
+ "suite": {
+  "judgeModel": "sonnet"
+ },
+ "cases": [
+  {
+   "name": "outcome-1",
+   "graders": [
+    {
+     "name": "amounts",
+     "type": "llm",
+     "config": {
+      "criteria": "The reply scales the recipe from 4 to 6 servings: 300 g flour, 3 eggs, 375 ml milk. FAIL if any amount is wrong or missing."
+     }
+    }
+   ],
+   "arms": {
+    "with": [
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour and 3 eggs. Keep the milk the same."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour and 3 eggs. Keep the milk the same."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 2 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 2 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 2 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 2 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 2 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 250 g flour, 3 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour and 3 eggs. Keep the milk the same."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 250 g flour, 3 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 0.0,
+      "passed": false,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": false,
+        "judgeVotes": [
+         false,
+         false,
+         false
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 250 g flour, 3 eggs and 375 ml milk."
+       }
+      ]
+     },
+     {
+      "score": 1.0,
+      "passed": true,
+      "graders": [
+       {
+        "name": "amounts",
+        "passed": true,
+        "judgeVotes": [
+         true,
+         true,
+         true
+        ],
+        "explanation": "judge votes",
+        "evidence": "For 6 servings: 300 g flour, 3 eggs and 375 ml milk. I multiplied each amount by 1.5."
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
