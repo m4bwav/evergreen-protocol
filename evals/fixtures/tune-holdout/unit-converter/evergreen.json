@@ -1,0 +1,57 @@
+{
+  "evergreen": "1.0",
+  "name": "unit-converter",
+  "kind": "skill",
+  "main": "SKILL.md",
+  "files": {
+    "research": "RESEARCH.md",
+    "changelog": "CHANGELOG.md",
+    "learnings": "LEARNINGS.md",
+    "tests": "TESTS.md"
+  },
+  "protocol": "MAINTENANCE.md",
+  "source": null,
+  "topic": "unit conversion for recipes and workouts",
+  "tier": "moderate",
+  "interval_days": 30,
+  "last_checked": "2026-10-23",
+  "next_due": "2026-11-22",
+  "verify_at_use": false,
+  "volatile_claims": [],
+  "contradiction": null,
+  "events": [],
+  "streak": {
+    "quiet": 0,
+    "pinned_min": 0,
+    "pinned_max": 0,
+    "vau_quiet": 0
+  },
+  "history": [
+    {
+      "date": "2026-10-23",
+      "m": null,
+      "interval_after": 30,
+      "note": "created"
+    }
+  ],
+  "counts": {
+    "learnings": 0,
+    "changes": 0,
+    "research": 0,
+    "tests": 0
+  },
+  "consolidate_every": 25,
+  "tests": {
+    "last_run": "2026-10-20T09:00",
+    "harness": "claude plugin eval",
+    "env": null,
+    "cases": 3,
+    "passed": 2,
+    "failed": 1,
+    "failing": [
+      "outcome-1"
+    ],
+    "last_failure": "2026-10-20",
+    "research_after_days": null
+  }
+}

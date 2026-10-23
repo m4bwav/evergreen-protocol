@@ -1001,6 +1001,81 @@ class Scaffold(unittest.TestCase):
         self.assertIn("evergreen-learn\"'", (o / "trigger-4" / "graders" / "fires.md").read_text(encoding="utf-8"))
         self.assertIn("(?:[\\w-]+:)?evergreen'", (o / "decoy-2" / "graders" / "quiet.md").read_text(encoding="utf-8"))
 
+    def test_judge_graders_get_the_length_rule_and_a_reference(self):
+        d = Path(self.tmp.name) / "ref-skill"
+        eg.main(["init", str(d), "--name", "ref-skill", "--topic", "t", "--standalone"])
+        suite = {"skill": "ref-skill", "evals": [
+            {"id": "outcome-1", "kind": "outcome", "prompt": "When was the Digest issued?", "expectations": ["gives the year"]},
+            {"id": "outcome-2", "kind": "outcome", "prompt": "When was the Digest issued?", "expectations": ["gives the year"],
+             "reference": "533, as part of the Corpus Juris Civilis"}]}
+        (d / "evals" / "evals.json").write_text(json.dumps(suite), encoding="utf-8")
+        out = capture(["eval-export", str(d)])
+        self.assertIn("outcome-1: a judged expectation with no `reference` answer", out)
+        self.assertNotIn("outcome-2: a judged", out)
+        j1 = (d / "evals" / "cases" / "outcome-1" / "graders" / "judge.md").read_text(encoding="utf-8")
+        j2 = (d / "evals" / "cases" / "outcome-2" / "graders" / "judge.md").read_text(encoding="utf-8")
+        self.assertIn(eg.JUDGE_RULE, j1)
+        self.assertNotIn("Reference answer", j1)
+        self.assertIn("Reference answer (a correct reply says this; its wording may differ):\n533, as part of", j2)
+
+    def test_holdout_is_asked_for_once_a_suite_can_spare_one(self):
+        p = Path(self.tmp.name) / "evals.json"
+        base = [{"id": "decoy-1", "kind": "trigger", "decoy": True, "prompt": "p"}]
+        value = [{"id": f"action-{i}", "kind": "action", "prompt": "p"} for i in range(3)]
+        p.write_text(json.dumps({"evals": base + value[:2]}), encoding="utf-8")
+        self.assertFalse(any("held-out" in x for x in eg.evals_problems(p)))   # two cases: holding one out leaves one
+        p.write_text(json.dumps({"evals": base + value}), encoding="utf-8")
+        self.assertTrue(any("held-out" in x for x in eg.evals_problems(p)))
+        value[2]["holdout"] = True
+        p.write_text(json.dumps({"evals": base + value}), encoding="utf-8")
+        self.assertFalse(any("held-out" in x for x in eg.evals_problems(p)))
+
+    def test_judge_sample_hides_verdicts_and_agree_measures_kappa(self):
+        t = Path(self.tmp.name)
+        runs = [{"graders": [{"name": "rubric", "passed": i % 2 == 0, "judgeVotes": [i % 2 == 0] * 3, "evidence": f"reply number {i}"}]}
+                for i in range(24)]
+        res = {"cases": [{"name": "o-1", "graders": [{"name": "rubric", "type": "llm", "config": {"criteria": "says the year"}}],
+                          "arms": {"with": runs}}]}
+        (t / "r1").mkdir()
+        (t / "r1" / "aggregate-result.json").write_text(json.dumps(res), encoding="utf-8")
+        labels = t / "cal" / "labels.md"   # a folder that does not exist yet
+        self.assertIn("wrote 24 item(s)", capture(["judge-sample", str(t / "r1"), "--out", str(labels), "--n", "30", "--seed", "1"]))
+        text = labels.read_text(encoding="utf-8")
+        self.assertEqual(text.count("label:\n"), 24)
+        self.assertNotIn("PASS\n", text)   # the labeller never sees the verdict
+        key = json.loads((t / "cal" / "labels-key.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(k["judge"] for k in key).count(True), 12)
+        self.assertNotEqual([k["judge"] for k in key], [i % 2 == 0 for i in range(24)])   # shuffled, not in result order
+
+        def fill(answers):
+            parts = labels.read_text(encoding="utf-8").split("\nlabel:")
+            labels.write_text(parts[0] + "".join(f"\nlabel: {a}" + rest for a, rest in zip(answers, parts[1:])), encoding="utf-8")
+
+        fill(["PASS" if k["judge"] else "FAIL" for k in key[:22]] + ["FAIL" if k["judge"] else "PASS" for k in key[22:]])
+        r = eg.judge_agree(labels)
+        self.assertEqual((r["labelled"], r["agree"]), (24, 22))
+        self.assertAlmostEqual(r["kappa"], 0.833, places=2)
+        self.assertTrue(r["calibrated"])
+        self.assertIn("calibrated: this judge may fail a case alone", capture(["judge-agree", str(labels)]))
+        # a sample the labeller fails throughout: raw agreement 50%, kappa 0, and never calibrated
+        labels.write_text(text, encoding="utf-8")
+        fill(["FAIL"] * 24)
+        r = eg.judge_agree(labels)
+        self.assertEqual(r["kappa"], 0.0)
+        self.assertFalse(r["calibrated"])
+        self.assertIsNone(eg.kappa([(False, False)] * 8))   # one rater never varies on either side: undefined
+        self.assertIn("its fail means review", capture(["judge-agree", str(labels)]))
+        # perfect agreement still needs enough labels, and enough of each answer
+        def perfect(judges):
+            k = t / "p-key.json"
+            k.write_text(json.dumps([{"judge": j} for j in judges]), encoding="utf-8")
+            (t / "p.md").write_text("".join(f"## {i} · c · g\n\nlabel: {'PASS' if j else 'FAIL'}\n" for i, j in enumerate(judges, 1)),
+                                    encoding="utf-8")
+            return eg.judge_agree(t / "p.md")
+        self.assertTrue(perfect([True] * 6 + [False] * 14)["calibrated"])
+        self.assertFalse(perfect([True] * 6 + [False] * 13)["calibrated"])   # 19 labels
+        self.assertFalse(perfect([True] * 4 + [False] * 20)["calibrated"])   # 4 passes
+
     def test_bench_intervals_smoke(self):
         import bench_intervals as bi
         res = bi.run(seed=3, days=120, units=2)

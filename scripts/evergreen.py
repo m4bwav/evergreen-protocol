@@ -26,6 +26,8 @@ Commands
                                     record a suite run; prints the next T- id for TESTS.md
   failed  <unit> --case ID --class CLASS [--note ..]   record a failure seen in use; says whether research is due first
   eval-export <unit> [--out DIR] [--force]   write `claude plugin eval` case folders from evals/evals.json
+  judge-sample <results...> --out FILE [--n 20]   a random sample of llm verdicts to label by hand
+  judge-agree <labels file>                  agreement and kappa between those labels and the judge
   worth   <skill|plugin|folder> [--against REV] [--results P ...] [--record] [--json]
                                     is a skill worth its tokens? static signals + the with/without A/B (evergreen_worth.py)
   worth-hook                        PostToolUse hook body (stdin JSON): warn once when an edited SKILL.md reads as mostly cost
@@ -682,6 +684,10 @@ def evals_problems(p: Path) -> list[str]:
     todo = [str(c.get("id") or f"#{i + 1}") for i, c in enumerate(cases) if "TODO" in str(c.get("prompt", ""))]
     if todo:
         out.append(f"evals/evals.json: TODO prompts still in {', '.join(todo)}")
+    value = [c for c in cases if c.get("kind") in ("action", "outcome") and not c.get("decoy")]
+    if len(value) >= 3 and not any(c.get("holdout") is True for c in value):   # 50 of 119 real suites on 2026-10-23
+        out.append('evals/evals.json: no held-out case; mark one action or outcome case "holdout": true so a tune '
+                   "cannot fit the cases it reads (TESTING.md section 5)")
     return out
 
 
@@ -1340,6 +1346,8 @@ def entry_title(heading: str) -> str:
 # `command` evidence has no counterpart here and stays with the tester agent.
 
 READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Skill"]
+# Every judge.md says this: a longer, surer reply is not a better one (after Huyen, AI Engineering, on judge biases).
+JUDGE_RULE = "Length, detail, tone and confidence are not criteria: judge only whether each requirement is met."
 # Decoys get the trigger suffix too: a decoy told not to act passes without testing anything.
 TRIGGER_SUFFIX = ("(For this run: start the job, and stop after the first two or three tool calls with a one-line note of "
                   "which skill you invoked and what you would do next.)")
@@ -1427,9 +1435,14 @@ def export_case(case: dict, data: dict) -> tuple[str, dict[str, str], list[str]]
                 else:
                     judged.append(str(e))
             if judged:
+                ref = str(case.get("reference") or "").strip()
+                if not ref:
+                    notes.append(f"{case.get('id')}: a judged expectation with no `reference` answer; add one so the judge "
+                                 "compares against it instead of its own idea of a good reply (TESTING.md section 7)")
                 graders["judge.md"] = _grader([("type", "llm"), ("name", _yaml_str("expectations"))],
                                               "PASS if the reply meets every one of these:\n" + "\n".join(f"- {j}" for j in judged)
-                                              + "\nFAIL if any is missing or contradicted.")
+                                              + "\nFAIL if any is missing or contradicted.\n" + JUDGE_RULE
+                                              + (f"\nReference answer (a correct reply says this; its wording may differ):\n{ref}" if ref else ""))
     banned = [str(x) for x in case.get("disallowed_tools") or []]  # Claude Code 2.1.299+; e.g. ["Agent"] keeps the work in the trace
     head = (f"---\nmax_turns: {turns}\ntimeout_seconds: {timeout}\nallowed_tools: [{', '.join(tools)}]\n"
             + (f"disallowed_tools: [{', '.join(banned)}]\n" if banned else "") + f"runs: {runs}\n---\n\n")
@@ -1459,6 +1472,97 @@ def eval_export(d: Path, out: Path | None = None, force: bool = False) -> tuple[
             write_lf(cdir / "graders" / name, text)
         written.append(cid)
     return written, kept, notes
+
+
+# ---------- judge calibration: label a random sample of llm verdicts, then measure agreement (TESTING.md section 7) ----------
+
+KAPPA_MIN, LABELS_MIN, CLASS_MIN = 0.61, 20, 5   # kappa 0.61 is "substantial"; fewer labels or one-sided labels say little
+
+
+def llm_verdicts(paths: list[Path]) -> list[dict]:
+    """Every llm grader verdict in `claude plugin eval` results (aggregate-result.json files, or folders holding them)."""
+    files = [f for p in paths for f in ([p] if p.is_file() else sorted(p.rglob("aggregate-result.json")))]
+    out = []
+    for f in files:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for c in data.get("cases") or []:
+            crit = {g["name"]: (g.get("config") or {}).get("criteria") or g.get("graderMarkdown") or ""
+                    for g in c.get("graders") or [] if g.get("type") == "llm"}
+            for arm, runs in (c.get("arms") or {}).items():
+                for i, r in enumerate(runs, 1):
+                    for g in r.get("graders") or []:
+                        if g.get("name") in crit and g.get("evidence"):
+                            out.append({"case": c.get("name"), "grader": g["name"], "arm": arm, "run": i, "source": str(f),
+                                        "criteria": crit[g["name"]], "reply": g["evidence"], "judge": bool(g.get("passed")),
+                                        "votes": g.get("judgeVotes")})
+    return out
+
+
+def judge_sample(paths: list[Path], n: int, out: Path, seed: int | None = None) -> int:
+    """Write a random sample of verdicts to label (criteria and reply, no verdict, so the labels cannot copy the
+    judge) and a key file beside it holding the verdicts. Random, never chosen by verdict: a sample of the judge's
+    fails agrees with any labeller who mostly says fail and measures nothing."""
+    rows = llm_verdicts(paths)
+    random.Random(seed).shuffle(rows)
+    rows = rows[:n]
+    parts = [f"# Judge labels\n\nFor each item, read the reply against the criteria and write PASS or FAIL after `label:`. "
+             f"Do not open {out.stem}-key.json until every label is written.\n"]
+    for i, r in enumerate(rows, 1):
+        parts.append(f"## {i} · {r['case']} · {r['grader']}\n\n### Criteria\n\n{r['criteria'].strip()}\n\n"
+                     f"### Reply\n\n{r['reply'].strip()}\n\nlabel:\n")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_lf(out, "\n".join(parts))
+    key = [{k: r[k] for k in ("case", "grader", "arm", "run", "source", "judge", "votes")} for r in rows]
+    write_lf(out.with_name(out.stem + "-key.json"), json.dumps(key, indent=1) + "\n")
+    return len(rows)
+
+
+def kappa(pairs: list[tuple[bool, bool]]) -> float | None:
+    """Cohen's kappa for two binary raters; None when chance agreement is total (one side never varies)."""
+    n = len(pairs)
+    if not n:
+        return None
+    po = sum(a == b for a, b in pairs) / n
+    pa, pb = sum(a for a, _ in pairs) / n, sum(b for _, b in pairs) / n
+    pe = pa * pb + (1 - pa) * (1 - pb)
+    return None if pe >= 1 else (po - pe) / (1 - pe)
+
+
+def judge_agree(labels: Path) -> dict:
+    key = json.loads(labels.with_name(labels.stem + "-key.json").read_text(encoding="utf-8"))
+    found = re.findall(r"^## (\d+) .*?^label:[ \t]*(\S*)", labels.read_text(encoding="utf-8"), flags=re.M | re.S)
+    pairs, blank = [], 0
+    for num, lab in found:
+        if lab.upper() not in ("PASS", "FAIL"):
+            blank += 1
+            continue
+        pairs.append((key[int(num) - 1]["judge"], lab.upper() == "PASS"))
+    k = kappa(pairs)
+    human_pass = sum(h for _, h in pairs)
+    ok = (k is not None and k >= KAPPA_MIN and len(pairs) >= LABELS_MIN
+          and min(human_pass, len(pairs) - human_pass) >= CLASS_MIN)
+    return {"labelled": len(pairs), "blank": blank, "agree": sum(a == b for a, b in pairs), "kappa": k,
+            "judge_pass_human_fail": sum(a and not b for a, b in pairs), "judge_fail_human_pass": sum(b and not a for a, b in pairs),
+            "human_pass": human_pass, "calibrated": ok}
+
+
+def cmd_judge_sample(a):
+    out = Path(a.out).expanduser()
+    n = judge_sample([Path(p).expanduser() for p in a.results], a.n, out, a.seed)
+    print(f"wrote {n} item(s) to {out} and the verdicts to {out.stem}-key.json; label every item before opening the key, "
+          f"then run: evergreen.py judge-agree {out}")
+
+
+def cmd_judge_agree(a):
+    r = judge_agree(Path(a.labels).expanduser())
+    k = "undefined (one side gave a single answer)" if r["kappa"] is None else f"{r['kappa']:.2f}"
+    print(f"{r['labelled']} labelled ({r['blank']} blank): agree {r['agree']}, kappa {k}; judge passed {r['judge_pass_human_fail']} "
+          f"the labels failed, failed {r['judge_fail_human_pass']} they passed")
+    print("calibrated: this judge may fail a case alone" if r["calibrated"] else
+          f"not calibrated (needs {LABELS_MIN}+ labels, {CLASS_MIN}+ of each answer, kappa {KAPPA_MIN}+): its fail means review")
 
 
 # ---------- packaging ----------
@@ -2322,6 +2426,11 @@ def main(argv=None):
     s = sp.add_parser("tested", parents=[common], help="record a suite run"); s.add_argument("unit"); s.add_argument("--passed", type=int, default=0); s.add_argument("--failed", type=int, default=0)
     s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the config's env_name, else the OS family (never the hostname)")
     s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards"); s.set_defaults(fn=cmd_tested)
+    s = sp.add_parser("judge-sample", parents=[common], help="a random sample of llm grader verdicts to label by hand, the verdicts in a key file beside it")
+    s.add_argument("results", nargs="+", help="aggregate-result.json files or folders holding them"); s.add_argument("--out", required=True)
+    s.add_argument("--n", type=int, default=LABELS_MIN); s.add_argument("--seed", type=int); s.set_defaults(fn=cmd_judge_sample)
+    s = sp.add_parser("judge-agree", parents=[common], help="agreement and kappa between the labels and the judge"); s.add_argument("labels")
+    s.set_defaults(fn=cmd_judge_agree)
     s = sp.add_parser("eval-export", parents=[common], help="write `claude plugin eval` case folders (prompt.md + graders/) from evals/evals.json")
     s.add_argument("unit"); s.add_argument("--out", help="folder for the cases (default: <unit>/evals/cases)")
     s.add_argument("--force", action="store_true", help="rewrite case folders that already exist (they may have been tuned by hand)")

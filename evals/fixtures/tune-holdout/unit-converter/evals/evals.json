@@ -1,0 +1,33 @@
+{
+ "skill": "unit-converter",
+ "evals": [
+  {
+   "id": "outcome-1",
+   "kind": "outcome",
+   "prompt": "How many km is a 26.2 mile marathon?",
+   "expectations": [
+    "regex on the answer: 42\\.16"
+   ],
+   "runs": 3
+  },
+  {
+   "id": "outcome-2",
+   "kind": "outcome",
+   "prompt": "Convert 2 lb of flour to kg.",
+   "expectations": [
+    "regex on the answer: 0\\.91"
+   ],
+   "runs": 3
+  },
+  {
+   "id": "outcome-3",
+   "kind": "outcome",
+   "holdout": true,
+   "prompt": "My run was 5 miles. How far is that in km?",
+   "expectations": [
+    "regex on the answer: 8\\.05"
+   ],
+   "runs": 3
+  }
+ ]
+}

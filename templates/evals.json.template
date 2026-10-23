@@ -1,6 +1,6 @@
 {
   "skill": "{{NAME}}",
-  "_format": "skill-creator evals.json plus evergreen fields (kind, decoy, evidence, baseline); extra fields are ignored by skill-creator's runner. Rules: protocol/TESTING.md.",
+  "_format": "skill-creator evals.json plus evergreen fields (kind, decoy, evidence, baseline, reference, holdout); extra fields are ignored by skill-creator's runner. reference: what a correct reply says, for the judge to compare against. holdout: true keeps a value case out of evergreen-tune's sight (mark one once there are three or more). Rules: protocol/TESTING.md.",
   "evals": [
     {
       "id": "trigger-1",
@@ -55,6 +55,7 @@
         "TODO: a deterministic check first (a value, a regex on the output, a file that exists)",
         "TODO: a quality criterion for a judge second, if needed"
       ],
+      "reference": "TODO: what a correct reply says, for the judge to compare against (omit when every check is deterministic)",
       "runs": 3
     }
   ]

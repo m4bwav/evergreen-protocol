@@ -1,6 +1,6 @@
 ---
 name: evergreen-test
-description: "Write and run the eval suite that proves a skill or plugin works: trigger prompts and decoys, action cases proven by evidence outside the transcript (a tool call in the trace, a file, a marker, a remote record), outcome cases, and a baseline without the skill. Use when a skill has just been written (with evergreen-new or skill-creator), after a refresh or a tune edited a skill, on 'test this skill', 'does X actually trigger', 'run the evals', 'prove X works', 'regression test the skills', 'write tests for X', or when the audit lists untested or overdue units. When a case fails, hand over to evergreen-tune. Not for testing application code; that is the repo's own test suite."
+description: "Write and run the eval suite that proves a skill or plugin works: trigger prompts and decoys, action cases proven by evidence outside the transcript (a tool call in the trace, a file, a marker, a remote record), outcome cases, and a baseline without the skill. Use when a skill has just been written (with evergreen-new or skill-creator), after a refresh or a tune edited a skill, on 'test this skill', 'does X actually trigger', 'run the evals', 'prove X works', 'regression test the skills', 'write tests for X', 'can I trust the llm judge', 'calibrate the grader', or when the audit lists untested or overdue units. When a case fails, hand over to evergreen-tune. Not for testing application code; that is the repo's own test suite."
 ---
 
 # Evergreen test
@@ -26,7 +26,8 @@ Read the skill's description and body first. Then, per TESTING.md §1:
 - Trigger: at least two prompts phrased the way the user actually asks (take them from the description's trigger phrases and from any real request in the conversation), `runs: 3`, expectation "the skill is invoked".
 - Decoys: at least two nearby prompts that must not trigger it (a sibling skill's job, plain conversation about the same nouns), `decoy: true`.
 - Action: at least one prompt whose fulfilment requires the skill's core action, with `evidence` named concretely: `{type: trace, tool, input_match}` for a tool call, `{type: file, path}` or `{type: marker}` for something the action leaves behind, `{type: command, run, expect}` for a check the caller can execute, `{type: log, path, pattern}` for a log line. For a delegation skill the evidence is the remote job id, the remote log line, or the file the remote side writes back; the local reply is not evidence. If no evidence can be named, the skill's action step needs to leave some; say so, and route that to `evergreen-tune` as class `no-op` before the suite is run.
-- Outcome: at least one prompt with a deterministic check (a value, a regex on the output, a file's content) and, only if needed, one quality criterion for a judge.
+- Outcome: at least one prompt with a deterministic check (a value, a regex on the output, a file's content) and, only if needed, one quality criterion for a judge. A judged case gets a `reference`: what a correct reply says, in a sentence or two, so the judge compares instead of grading against its own taste.
+- Hold-out: once the suite has three or more action and outcome cases, mark one `"holdout": true`. `evergreen-tune` never reads it while choosing an edit, then runs it to show the edit did not fit the cases it saw.
 
 Keep prompts short and realistic. Do not tell the case which skill to use; a trigger case that names the skill tests nothing.
 
@@ -37,7 +38,7 @@ Pick the harness from TESTING.md §6, first that exists. Prefer `claude plugin e
 0. Second platform: when the skill has a script and another operating system is reachable (a LAN machine over ssh, a Linux sandbox, CI), run its action case there once and record the result; otherwise write `untested elsewhere` in the TESTS.md entry (PROTOCOL.md §8).
 1. Baseline once per action and outcome case: the same prompt in a fresh context with the skill absent (the plugin eval harness runs this arm by default; with the tester, tell it not to load the skill, or run before the skill is installed). Record what happened in the case's `baseline` field, one line, dated and with the run's result (a prediction of what a fresh session would do is not a baseline, and `worth` counts it as never run, L-029). A case that passes without the skill is redundant: sharpen it or mark it.
 2. Run every case `runs` times (default 3) in fresh contexts. Collect the evidence the case names; for trigger cases, the Skill tool call in the trace or the tester's report of the skills it invoked.
-3. Judge per TESTING.md §7: trigger 2 of 3, decoy 0 of 3, action and outcome every run with evidence. Never grade an action case on the reply's wording.
+3. Judge per TESTING.md §7: trigger 2 of 3, decoy 0 of 3, action and outcome every run with evidence. Never grade an action case on the reply's wording. A case that fails only on its `llm` grader counts as `review`, not a failure, until that judge is calibrated: `EG judge-sample <results folder> --out <scratch>/labels.md`, label every item before opening the key file, then `EG judge-agree <scratch>/labels.md` (kappa 0.61 or more on 20 labels with 5 of each answer). Use these two commands, never a labelling script of your own: they sample at random and keep the verdicts out of the labeller's file, and those two properties are what make the number mean anything. Read each `review` reply yourself and record your verdict.
 
 Cost: a suite is a handful of prompts times three runs; run it at creation, after an edit, after a failure, on request. Not on every use.
 
@@ -47,7 +48,7 @@ Cost: a suite is a handful of prompts times three runs; run it at creation, afte
 EG tested <unit> --passed N --failed M [--failing id,id] --harness <name> --note "<one line>"
 ```
 
-It updates `evergreen.json.tests` and prints the next `T-` id. Write that entry at the top of `TESTS.md`: harness, environment, passed/total, one line per failing case (`id · kind · class · what the evidence showed`), redundant cases if any, and `led to:` (fill in after tuning; `none` for a clean run). Trigger results from a subagent are a proxy for the main loop: say so in the entry.
+It updates `evergreen.json.tests` and prints the next `T-` id. Write that entry at the top of `TESTS.md`: harness, environment, judge model and whether it is calibrated (with the kappa), passed/total, one line per failing case (`id · kind · class · what the evidence showed`), redundant cases if any, and `led to:` (fill in after tuning; `none` for a clean run). Trigger results from a subagent are a proxy for the main loop: say so in the entry.
 
 If any case failed: hand over to `evergreen-tune` in this session with the case ids and the evidence collected. Do not edit the skill here.
 
