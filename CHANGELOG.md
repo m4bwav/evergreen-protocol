@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261023-2 · 2026-10-23 · Social preview picture for the repository, for the 0.17.0 release
+- because: the repository showed GitHub's generated card when a link to it was shared; the README banner is 2.4:1, wider than the 2:1 card
+- files: .github/images/social-preview.jpg (new), .github/images/banner.md (Social preview)
+- A 1280x640 render with the README banner's prompt and seed, chosen from six; banner.md records the recipe and why this one. Version unchanged.
+
 ### C-20261023-1 · 2026-10-23 · Judges get reference answers, a length rule and a calibration check; tuning gets a held-out case
 - because: L-032, L-033, T-20261023-1; reading Huyen, *AI Engineering*, on judge biases, calibration and contamination
 - files: scripts/evergreen.py (export_case, JUDGE_RULE, evals_problems, llm_verdicts, judge_sample, kappa, judge_agree, the judge-sample and judge-agree commands), scripts/test_evergreen.py, protocol/TESTING.md (§5 steps 5 and 6, §6 cross-harness row, §7), skills/evergreen-test/SKILL.md (Steps 2, 3 and 4), skills/evergreen-tune/SKILL.md (Steps 5 and 6), templates/evals.json.template, evals/evals.json (action-7, outcome-4, outcome-2 held out), evals/fixtures/judge-results, evals/fixtures/tune-holdout
