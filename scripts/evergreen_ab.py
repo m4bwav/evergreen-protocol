@@ -22,6 +22,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -349,7 +350,9 @@ def grade(ev, run: Path, res: dict, variables: dict[str, str], base_commit: str 
         else:
             home = variables.get("__home__")
             if home and not re.search(r"[|&;<>]", cmd):
-                cmd = " ".join(localize(cmd.split(), run, Path(home)))
+                parts = localize(cmd.split(), run, Path(home))
+                # quoted: an interpreter or home path with a space broke the shell command and failed every run (L-040)
+                cmd = subprocess.list2cmdline(parts) if os.name == "nt" else shlex.join(parts)
             try:
                 r = subprocess.run(cmd, shell=True, cwd=str(run), capture_output=True, timeout=300)
                 outp = r.stdout.decode("utf-8", "replace") + r.stderr.decode("utf-8", "replace")

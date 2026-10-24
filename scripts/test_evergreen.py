@@ -1913,6 +1913,12 @@ class WorthUseful(unittest.TestCase):
         finally:
             os.chdir(cwd)
         self.assertTrue(Path(parts[1]).is_absolute())
+        # a checker under a home whose path has a space still runs (the shell command is quoted)
+        spaced = self.t / "home 4"
+        (spaced / "evals").mkdir(parents=True)
+        (spaced / "evals" / "check.py").write_text("import sys; sys.exit(0)\n", encoding="utf-8")
+        ev = {"type": "command", "run": "python evals/check.py ."}
+        self.assertTrue(eab.grade(ev, run, {"uses": [], "answer": ""}, {"__home__": str(spaced)}, None))
 
     def test_case_lint_finds_what_would_waste_an_ab(self):
         u = self.unit_with_cases([

@@ -4,6 +4,14 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261024-1 · 2026-10-24 · `worth --ab` quotes a `command` evidence after localizing it
+- because: an A/B graded every `command` evidence as failed while the same checker passed when run by hand in the
+  kept run folders (traced: the interpreter's path had a space)
+- files: scripts/evergreen_ab.py (`grade`, `command`), scripts/test_evergreen.py (a checker under a home with a space)
+- `localize` swaps `python` for the interpreter's full path and a script for its absolute path; the parts were joined
+  with spaces and run through the shell, so an interpreter under `C:\Program Files` ran as `C:\Program`. The parts
+  are now quoted (`list2cmdline` on Windows, `shlex.join` elsewhere).
+
 ### C-20261023-2 · 2026-10-23 · Social preview picture for the repository, for the 0.17.0 release
 - because: the repository showed GitHub's generated card when a link to it was shared; the README banner is 2.4:1, wider than the 2:1 card
 - files: .github/images/social-preview.jpg (new), .github/images/banner.md (Social preview)
