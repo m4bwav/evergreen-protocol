@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261024-2 · 2026-10-24 · Version 0.17.1: the `worth --ab` command-evidence fix released
+- because: user request (release the C-20261024-1 fix so installed copies stop misgrading `command` evidence)
+- files: .claude-plugin/plugin.json, plugin.json (0.17.1)
+- No protocol change; the patch release carries C-20261024-1.
+
 ### C-20261024-1 · 2026-10-24 · `worth --ab` quotes a `command` evidence after localizing it
 - because: an A/B graded every `command` evidence as failed while the same checker passed when run by hand in the
   kept run folders (traced: the interpreter's path had a space)
