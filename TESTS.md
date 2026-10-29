@@ -8,6 +8,12 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20261029-1 · 2026-10-29 · scripts/test_evergreen.py; scout commands against the installed everscout 0.6.0 · owner-pc · self-test green; model-run cases owed
+- 128 tests OK (1 skipped), five new in `Scout`: no everscout means no question and no state; offer, decline, then silence; create seeds the beat (scope, two questions, `--feeds evergreen:<unit>`) and links it, and leads say "scan first" for a never-scanned beat; link refuses a missing beat; detection reads `installed_plugins.json`.
+- Live: `scout detect` found the installed plugin; `scout offer` on an existing skill printed the question with the head of its topic.
+- action-8, action-9, decoy-8 and trigger-14 are written and not yet run under a harness; the first real run of action-8 is the next new plugin built with evergreen-new.
+led to: C-20261029-1
+
 ### T-20261023-1 · 2026-10-23 · `worth --ab` action-7, outcome-4 (sonnet, 3 runs per arm); claude plugin eval 2.1.307 (trigger-2, decoy-1 to decoy-7; sonnet judge, --no-publish, --ablation none); scripts/test_evergreen.py · owner-pc · 9/10 (trigger-2 3/3, decoys 7/7, outcome-4 passes but redundant, action-7 2 of 3)
 - Judge: sonnet in claude plugin eval 2.1.307, grader texts as exported before this change. Calibration (new `judge-sample`, `judge-agree`): a random 20 of this plugin's own past `llm` verdicts, labelled blind by Claude before opening the key, agreed 20 of 20, kappa 1.00, so the plugin's judge is calibrated for its routing criteria. The labeller is the judge's model family; a cross-family check is still owed.
 - action-7 · action · undertrigger · "set me up to check how often the grader agrees with me" on a results folder. First run: the skill fired 0 of 3 and every run wrote its own labelling scripts. After the description named judge calibration: fired 2 of 3. One run that fired then wrote its own `judge_sample.py` (fallback); after Step 3 named the two commands and forbade a hand-made script: with 2 of 3 (both runs that fired passed, the third never loaded the skill), without 0 of 3, at 0.59x the cost. Left failing rather than tuned on the case's own wording.

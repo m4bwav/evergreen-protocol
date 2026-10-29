@@ -40,6 +40,8 @@ No shell reaching the folder? Copy the templates from `<plugin root>/templates/`
 
 While converting, note anything platform-bound in the skill's scripts or instructions (backslash paths, `%USERPROFILE%`, PowerShell-only steps, CRLF in a `.sh`) and either fix it or record it as a learning; the protocol prefers cross-platform compatibility wherever it is not onerous (PROTOCOL.md §8).
 
+Then `EG scout offer <unit>` (PROTOCOL.md §8, "A beat for a new unit"): silent exit 1 means say nothing; otherwise ask the printed question once, then `EG scout create <unit>` on yes (and finish the beat with `everscout-beat`) or `EG scout decline <unit>` on no. When converting many, offer per unit as each is converted, never as a batch afterwards.
+
 A skill that calls anything outside itself (an executable, an import, an environment variable, a URL, a model, an MCP server) gets a `SETUP.md` too: `EG setup <unit> --init`, then the Needs table from what Step 1 found, linked from the main file (PROTOCOL.md §12).
 
 ## Step 3: fill, do not stub

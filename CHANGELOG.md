@@ -4,6 +4,13 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261029-1 · 2026-10-29 · Version 0.18.0: a new unit is offered an everscout beat once; a linked beat feeds the refresh as leads
+- because: owner request (a community watch between refreshes, born with each new plugin); protocol 1.20
+- files: scripts/evergreen_scout.py (new: `scout detect|offer|create|link|decline|leads`), scripts/evergreen.py (main: loads it), scripts/test_evergreen.py (`Scout`, 5 tests), protocol/PROTOCOL.md (§4 before the search; §8 "A beat for a new unit"), skills/evergreen-new/SKILL.md (Step 3), skills/evergreen-convert/SKILL.md (Step 2), skills/evergreen-refresh/SKILL.md (Step 2, Step 4), evals/evals.json (action-8, action-9, decoy-8, trigger-14), AGENTS.md (Commands), plugin.json, .claude-plugin/plugin.json
+- Detection is a command, not prose each skill repeats: a Claude Code plugin install from any marketplace, the plugin cache, a local marketplace, exported skills, or an everscout unit in the registry; `EVERGREEN_NO_SCOUT=1` forces absent, `EVERSCOUT_PY` names the script. Absent means `scout offer` prints nothing and exits 1, so the skills say nothing.
+- State: `"scout": {"beat": slug, "status": "linked" | "declined", "date"}`. A slug, not a path, since beats live in each machine's private everscout folder and many units sit in public repositories; `declined` is what makes ask-once checkable. Needs everscout 0.6.0 (`beat-new --scope --question --feeds`, `leads`).
+- Refresh reads `scout leads` before the search, scans the beat first when its last scan is older than the unit's interval, verifies every lead against a primary source and names the leads used in the history note.
+
 ### C-20261024-2 · 2026-10-24 · Version 0.17.1: the `worth --ab` command-evidence fix released
 - because: user request (release the C-20261024-1 fix so installed copies stop misgrading `command` evidence)
 - files: .claude-plugin/plugin.json, plugin.json (0.17.1)

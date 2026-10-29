@@ -2378,5 +2378,107 @@ class Wrapup(unittest.TestCase):
             self.assertEqual(h["corrections"], ["[mid-turn] the right leg should be black like the other one",
                                                 "[mid-turn] also get rid of the grey thing"])
 
+import evergreen_scout as esc  # noqa: E402
+
+FAKE_ES = r"""
+import json, os, sys
+root = os.environ["FAKE_ES_ROOT"]
+cmd = sys.argv[1]
+if cmd == "beat-new":
+    slug = sys.argv[2]
+    d = os.path.join(root, "beats", slug); os.makedirs(d)
+    open(os.path.join(d, "args.json"), "w").write(json.dumps(sys.argv[3:]))
+    print(d)
+elif cmd == "where":
+    slug = sys.argv[sys.argv.index("--beat") + 1]
+    d = os.path.join(root, "beats", slug)
+    if not os.path.isdir(d):
+        print("no beat " + slug, file=sys.stderr); sys.exit(2)
+    print("BEAT    %s = %s" % (slug, d))
+elif cmd == "leads":
+    print(json.dumps({"beat": "b", "since": sys.argv[sys.argv.index("--since") + 1], "last_fetch": None,
+                      "reports": [], "notes": [{"date": "2026-10-20", "title": "a lead", "url": "https://example.org/x",
+                      "summary": "", "path": "notes/x.md"}], "notes_total": 1}))
+"""
+
+
+class Scout(unittest.TestCase):
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.root = Path(self.td.name)
+        (self.root / "beats").mkdir()
+        script = self.root / "everscout.py"
+        script.write_text(FAKE_ES, encoding="utf-8")
+        self.unit = self.root / "craftwright"
+        self.unit.mkdir()
+        (self.unit / "SKILL.md").write_text('---\nname: craftwright\ndescription: "Designs crafts. Use on craft."\n---\n', encoding="utf-8")
+        eg.save_state(self.unit, eg.new_state("craftwright", "craft design: loops and balance", "skill", "moderate", "SKILL.md", "plugin", None, NOW.date()))
+        self.env = unittest.mock.patch.dict(os.environ, {"EVERSCOUT_PY": str(script), "FAKE_ES_ROOT": str(self.root)})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.td.cleanup()
+
+    def cli(self, *argv):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            try:
+                eg.main(["scout", *argv])
+                code = 0
+            except SystemExit as e:
+                code = e.code or 0
+        return code, buf.getvalue()
+
+    def scout(self):
+        return json.loads((self.unit / "evergreen.json").read_text(encoding="utf-8")).get("scout")
+
+    def test_no_everscout_means_no_question(self):
+        with unittest.mock.patch.dict(os.environ, {"EVERGREEN_NO_SCOUT": "1"}):
+            self.assertEqual(self.cli("detect")[0], 1)
+            code, out = self.cli("offer", str(self.unit))
+        self.assertEqual((code, out), (1, ""))
+        self.assertIsNone(self.scout())
+
+    def test_offer_names_the_craft_once_then_decline_silences_it(self):
+        code, out = self.cli("offer", str(self.unit))
+        self.assertEqual(code, 0)
+        self.assertIn("everscout beat on craft design and how people use AI to do it", out)
+        self.assertEqual(self.cli("decline", str(self.unit))[0], 0)
+        self.assertEqual(self.scout()["status"], "declined")
+        self.assertEqual(self.cli("offer", str(self.unit)), (1, ""))
+
+    def test_create_seeds_the_beat_and_links_it(self):
+        code, out = self.cli("create", str(self.unit))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.scout()["status"], "linked")
+        self.assertEqual(self.scout()["beat"], "craftwright")
+        args = json.loads((self.root / "beats" / "craftwright" / "args.json").read_text(encoding="utf-8"))
+        self.assertIn("evergreen:craftwright", args)
+        self.assertEqual(args.count("--question"), 2)
+        self.assertIn("how are people using ai", " ".join(args).lower())
+        code, out = self.cli("leads", str(self.unit))
+        self.assertEqual(code, 0, out)
+        self.assertIn("scan first", out)   # never scanned
+        self.assertIn("a lead", out)
+        self.assertIn("verify each against a primary source", out)
+
+    def test_link_refuses_a_missing_beat(self):
+        self.assertEqual(self.cli("link", str(self.unit), "--beat", "nope")[0], 1)
+        self.assertIsNone(self.scout())
+
+    def test_detect_reads_installed_plugins(self):
+        home = self.root / "home"
+        inst = home / ".claude" / "plugins"
+        (home / "es" / "scripts").mkdir(parents=True)
+        (home / "es" / "scripts" / "everscout.py").write_text("", encoding="utf-8")
+        inst.mkdir(parents=True)
+        (inst / "installed_plugins.json").write_text(json.dumps({"plugins": {"everscout@mark-local": [{"installPath": str(home / "es")}]}}), encoding="utf-8")
+        os.environ.pop("EVERSCOUT_PY")
+        with unittest.mock.patch.object(Path, "home", return_value=home):
+            found = esc.detect()
+        self.assertEqual(found[1], "plugin everscout@mark-local")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
