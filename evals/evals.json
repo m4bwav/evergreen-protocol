@@ -389,7 +389,10 @@
       "kind": "outcome",
       "skill": "evergreen-tune",
       "fixture": "tune-holdout",
-      "tools": ["Edit", "Bash"],
+      "tools": [
+        "Edit",
+        "Bash"
+      ],
       "max_turns": 25,
       "prompt": "outcome-1 of the skill in <fixture>/unit-converter keeps failing (see its TESTS.md). Tune it: make the edit, but don't run any evals. Then tell me which of its eval cases you looked at before editing and which you would run afterwards.",
       "expectations": [
@@ -405,6 +408,71 @@
       "runs": 3,
       "redundant": true,
       "baseline": "2026-10-23 worth --ab (sonnet): without the skill 3 of 3 passed (the fixture's \"holdout\": true is enough of a hint); with it 3 of 3, and evergreen-tune never fired (T-20261023-1)"
+    },
+    {
+      "id": "action-8",
+      "kind": "action",
+      "prompt": "Copy evals/fixtures/sample-skill from the evergreen plugin to a temp folder and make that copy an evergreen skill. Yes, I'd like a scout beat for it if you can set one up.",
+      "expectations": [
+        "the beat offer runs (`scout offer`), and on the user's yes the copy's evergreen.json gets `scout.status: linked` with a beat slug, and the beat folder exists in everscout's private beat folder"
+      ],
+      "evidence": {
+        "type": "trace",
+        "tool": "Bash",
+        "input_match": "evergreen\\.py\\\"?\\s+scout\\s+create",
+        "and": {
+          "type": "file",
+          "path": "<temp folder>/evergreen.json",
+          "contains": "\"status\": \"linked\""
+        }
+      },
+      "setup": "EVERSCOUT_PY points at a stub everscout.py whose beat-new writes the beat folder under a temp root (scripts/test_evergreen.py FAKE_ES); remove the beat afterwards",
+      "runs": 3
+    },
+    {
+      "id": "action-9",
+      "kind": "action",
+      "prompt": "Refresh the sample skill in my temp folder; it's linked to an everscout beat, use what the beat found.",
+      "expectations": [
+        "the refresh runs `scout leads` before researching, and its history note names the beat leads (`beat leads:`)"
+      ],
+      "evidence": {
+        "type": "trace",
+        "tool": "Bash",
+        "input_match": "evergreen\\.py\\\"?\\s+scout\\s+leads",
+        "and": {
+          "type": "file",
+          "path": "<temp folder>/evergreen.json",
+          "contains": "beat leads:"
+        }
+      },
+      "setup": "the fixture copy has scout.status linked to a stub beat whose `leads` returns two notes",
+      "runs": 3
+    },
+    {
+      "id": "decoy-8",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "Copy evals/fixtures/sample-skill from the evergreen plugin to a temp folder and make that copy an evergreen skill.",
+      "expectations": [
+        "with EVERGREEN_NO_SCOUT=1 (everscout absent), no beat question is asked, no `scout create` or `scout decline` runs, and the copy's evergreen.json has no `scout` key"
+      ],
+      "evidence": {
+        "type": "file",
+        "path": "<temp folder>/evergreen.json",
+        "not_contains": "\"scout\""
+      },
+      "setup": "EVERGREEN_NO_SCOUT=1",
+      "runs": 3
+    },
+    {
+      "id": "trigger-14",
+      "kind": "trigger",
+      "prompt": "Can you offer me an everscout beat for my existing juice-scan skill so its refreshes get community leads?",
+      "expectations": [
+        "an evergreen skill or `evergreen.py scout offer` handles it for the one named unit; no bulk offer to other units"
+      ],
+      "runs": 3
     }
   ]
 }

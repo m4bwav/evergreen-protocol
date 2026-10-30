@@ -2472,6 +2472,11 @@ def main(argv=None):
     except Exception as e:  # optional like the sync module
         print(f"[evergreen] setup command unavailable: {e}", file=sys.stderr)
     try:
+        import evergreen_scout as esc
+        esc.add_parsers(sp, common)  # scout
+    except Exception as e:  # optional like the sync module
+        print(f"[evergreen] scout command unavailable: {e}", file=sys.stderr)
+    try:
         import evergreen_wrapup as ewu
         ewu.add_parsers(sp, common)  # wrapup
     except Exception as e:  # optional like the sync module

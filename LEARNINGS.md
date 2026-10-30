@@ -6,6 +6,13 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-044 · 2026-10-29 · A test stub that prints only the lines the parser wants hides the parser's bug
+- Trigger: the first real `scout create` (on a new game design plugin) crashed with "list index out of range" after everscout had created the beat; the unit stayed unlinked.
+- Hypothesis: `everscout.py where --beat` prints `BEATS <folder>` lines before `BEAT <slug> = <path>`, and `startswith("BEAT")` matched the folder line first. The stub printed only the BEAT line, so the self-test passed.
+- Rule: a stub for another tool's output copies the real output's shape, every line kind included; parse a keyed line by its exact first token.
+- Evidence: C-20261029-2; the new stub fails the old code.
+- helpful: 1 · harmful: 0
+
 ### L-032 · 2026-10-23 · A judge's wording is part of the judge; calibrate on a random sample, never one picked by verdict (`judge-wording-and-random-labels`)
 - Trigger: 2026-10-23. 1,109 `llm` verdicts from 104 graders in six repositories' plugin-eval results: three votes split on 5%, and graders packing four or more criteria split no more often (3.8%) than single-criterion ones (6.3%). Re-judging eight replies the harness judge had failed unanimously, the same model (Sonnet) with the same criteria in a differently worded prompt gave 12 PASS votes of 24. Blind labels on those eight agreed with the harness on 6 and with the re-worded judge on 5; the harness's kappa there was 0 by construction, since it had failed all eight. A random 20 of this plugin's own verdicts, labelled blind, agreed 20 of 20 (kappa 1.00).
 - Hypothesis: a judge prompt is an instrument; its framing moves borderline verdicts as much as the criteria do. A sample chosen by verdict holds one answer from the judge, so agreement there measures the labeller's base rate, not the judge.
