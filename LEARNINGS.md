@@ -6,7 +6,7 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
-### L-043 · 2026-10-29 · A test stub that prints only the lines the parser wants hides the parser's bug
+### L-044 · 2026-10-29 · A test stub that prints only the lines the parser wants hides the parser's bug
 - Trigger: the first real `scout create` (on a new game design plugin) crashed with "list index out of range" after everscout had created the beat; the unit stayed unlinked.
 - Hypothesis: `everscout.py where --beat` prints `BEATS <folder>` lines before `BEAT <slug> = <path>`, and `startswith("BEAT")` matched the folder line first. The stub printed only the BEAT line, so the self-test passed.
 - Rule: a stub for another tool's output copies the real output's shape, every line kind included; parse a keyed line by its exact first token.

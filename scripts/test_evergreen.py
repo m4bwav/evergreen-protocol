@@ -2394,7 +2394,7 @@ elif cmd == "where":
     d = os.path.join(root, "beats", slug)
     if not os.path.isdir(d):
         print("no beat " + slug, file=sys.stderr); sys.exit(2)
-    print("BEATS   %s" % os.path.join(root, "beats"))  # the real `where` lists beat folders first (L-043)
+    print("BEATS   %s" % os.path.join(root, "beats"))  # the real `where` lists beat folders first (L-044)
     print("BEAT    %s = %s" % (slug, d))
 elif cmd == "leads":
     print(json.dumps({"beat": "b", "since": sys.argv[sys.argv.index("--since") + 1], "last_fetch": None,

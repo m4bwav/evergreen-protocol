@@ -5,7 +5,7 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
 ### C-20261029-2 · 2026-10-29 · `scout create` finds the BEAT line, not the BEATS folder lines
-- because: L-043 (the first live run, on a new plugin, crashed after `beat-new` and before linking)
+- because: L-044 (the first live run, on a new plugin, crashed after `beat-new` and before linking)
 - files: scripts/evergreen_scout.py (`cmd_create`), scripts/test_evergreen.py (the stub prints BEATS lines first, as the real `where` does)
 - The test fails on the old code and passes now.
 
