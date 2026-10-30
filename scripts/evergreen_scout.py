@@ -191,7 +191,7 @@ def cmd_create(a) -> int:
         print(f"beat-new failed: {(r.stderr or r.stdout).strip()}")
         return 1
     where = run_es(found[0], "where", "--beat", slug)
-    beat_dir = next((ln.split("=", 1)[1].strip() for ln in where.stdout.splitlines() if ln.startswith("BEAT")), None)
+    beat_dir = next((ln.split("=", 1)[1].strip() for ln in where.stdout.splitlines() if ln.split(None, 1)[:1] == ["BEAT"] and "=" in ln), None)
     if not beat_dir:
         print(f"beat {slug} was not found after beat-new: {(where.stderr or where.stdout).strip()}")
         return 1

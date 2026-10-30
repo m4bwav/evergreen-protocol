@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261029-2 · 2026-10-29 · `scout create` finds the BEAT line, not the BEATS folder lines
+- because: L-043 (the first live run, on a new plugin, crashed after `beat-new` and before linking)
+- files: scripts/evergreen_scout.py (`cmd_create`), scripts/test_evergreen.py (the stub prints BEATS lines first, as the real `where` does)
+- The test fails on the old code and passes now.
+
 ### C-20261029-1 · 2026-10-29 · Version 0.18.0: a new unit is offered an everscout beat once; a linked beat feeds the refresh as leads
 - because: owner request (a community watch between refreshes, born with each new plugin); protocol 1.20
 - files: scripts/evergreen_scout.py (new: `scout detect|offer|create|link|decline|leads`), scripts/evergreen.py (main: loads it), scripts/test_evergreen.py (`Scout`, 5 tests), protocol/PROTOCOL.md (§4 before the search; §8 "A beat for a new unit"), skills/evergreen-new/SKILL.md (Step 3), skills/evergreen-convert/SKILL.md (Step 2), skills/evergreen-refresh/SKILL.md (Step 2, Step 4), evals/evals.json (action-8, action-9, decoy-8, trigger-14), AGENTS.md (Commands), plugin.json, .claude-plugin/plugin.json
