@@ -104,6 +104,11 @@ Best sources (primary first): code.claude.com/docs (plugins-reference, skills, h
 
 ## Findings log
 
+### R-20261031-1 · 2026-10-31 · Book: Huyen, *AI Engineering* (2024), the evaluation chapters
+- Track: testing. Source: the book, ch. 3 and 4 (AI as a judge, agent evaluation), paraphrased; no text copied.
+- A judge is a model plus a prompt: a change to either changes the scores, so pin both and recalibrate on change. Judges are steadier with labels or a narrow scale with an example per level than with a wide numeric scale. Agents fail by tool-call type (unknown tool, bad parameters, wrong values) and by claiming success falsely; efficiency (steps and cost per task) is its own axis against a baseline.
+- Magnitude: 0.1. applied: C-20261031-1.
+
 ### R-20261030-1 · 2026-10-30 · Use-time claim check: Claude Code 2.1.314; plugin eval gains `--disallow-tools`; other claims hold
 - Track: subject and testing. Sources: github.com/anthropics/claude-code releases and CHANGELOG.md (2.1.281 to 2.1.314), code.claude.com/docs/en/plugin-evals, code.claude.com/docs/en/skills, issues #40495 (open) and #63360 (closed), all read 2026-10-30.
 - Newest release 2.1.314 (2026-10-30). `claude plugin eval` is still documented; since 2.1.280 it added `--disallow-tools` and a `disallowed_tools` case field (keeps tools such as Agent out of runs), scores API-refused runs 0, and needs git 2.31+. AGENTS.md now also loads on Bedrock, Vertex, Foundry and gateways; a SessionEnd fix for exits with a background command running. Skills reference: still 20 fields, no `tags`, 1,536-character cap, no `.agents/skills/`. Cowork hooks: #40495 still open.
