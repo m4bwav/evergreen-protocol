@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261031-1 · 2026-10-31 · evergreen-test: pin the judge, label graders, agent efficiency evidence
+- because: R-20261031-1
+- files: skills/evergreen-test/SKILL.md (Step 2 Action and Outcome, Step 3 judge)
+- The TESTS.md entry records the judge model id and a grader prompt hash, and a change to either resets calibration; an `llm` grader answers with a label, or 1 to 5 with one example per level; agent skills count tool-call failures by type, false "done" claims, and steps and cost per run against the baseline arm.
+
 ### C-20261029-2 · 2026-10-29 · `scout create` finds the BEAT line, not the BEATS folder lines
 - because: L-044 (the first live run, on a new plugin, crashed after `beat-new` and before linking)
 - files: scripts/evergreen_scout.py (`cmd_create`), scripts/test_evergreen.py (the stub prints BEATS lines first, as the real `where` does)
