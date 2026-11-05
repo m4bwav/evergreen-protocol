@@ -14,6 +14,8 @@ The failure this exists for: a skill that says "delegating to the other machine"
 
 Decoys are trigger cases with `decoy: true`: a sibling skill's job, or plain conversation, that must not invoke the skill. Undertriggering is the most common skill failure (a 2026 eval saw a skill go unused in 56% of relevant tasks), so trigger cases are never skipped.
 
+Choosing what shows a wrong answer: the `reference` is one kind of oracle. Also ask whether the result can be checked against the world (a date, a file on disk), the skill's own claims, its earlier behaviour, a comparable tool, its purpose, or itself (the reply against its own files) (after Bach and Bolton, *Taking Testing Seriously*, ch. 3). Once a suite is stable, give an action or outcome case a reworded variant: wording sensitivity is a failure of its own, and one phrasing cannot show it.
+
 Baseline: run each action and outcome prompt once in a fresh context with the skill absent and record what happens in the case's `baseline` field. Two things come out of it. A case that passes without the skill is not testing the skill; sharpen it or drop it. A skill whose whole suite passes without it is a retirement candidate: say so to the user.
 
 ## 2. The evidence rule
@@ -29,7 +31,7 @@ Prose in the final message ("I delegated the task", "tests pass") counts for not
 ## 3. Files
 
 - `evals/evals.json`: the cases, in skill-creator's `evals.json` shape (`skill`, `evals: [{id, prompt, files, expectations}]`) plus evergreen fields: `kind`, `decoy`, `evidence` (`{type: trace|file|marker|command|log, tool, input_match, path, min, max, ...}`), `baseline`, `runs`, `disallowed_tools`. skill-creator's runner ignores the extra fields; `claude plugin eval` reads its own case folders (`prompt.md` plus `graders/*.md`), which `evergreen.py eval-export <unit>` writes from this file (a trigger becomes `tool_used` on `Skill` with the skill's name, taken from an optional per-case `skill` field or from "the X skill is invoked"; a decoy the same with `max: 0`, and the same prompt suffix as a trigger, since a decoy told not to act passes without testing anything; a trace's `min` and `max` carry over; trace, file and log evidence become `tool_used`, `file_exists` and `regex`; command evidence has no grader there), so one suite still serves every harness. Folders that already exist are kept unless `--force`, since they are often tuned by hand. Template: `templates/evals.json.template`.
-- `TESTS.md`: the run log, `T-YYYYMMDD-n` entries (harness, environment, passed/total, one line per failure with its class and what the evidence showed, `led to:` the learning, change and research ids it produced). Double-linked like the other companions: a change made by tuning cites `because: T-..., L-...`. Budget 150 lines; archive to `TESTS-ARCHIVE.md`. Template: `templates/TESTS.md.template`.
+- `TESTS.md`: the run log, `T-YYYYMMDD-n` entries (harness, environment, passed/total, one line per failure with its class and what the evidence showed, a `not covered:` line naming what this suite cannot sense, since a green count says nothing about that and counts do not compare across units, `led to:` the learning, change and research ids it produced). Double-linked like the other companions: a change made by tuning cites `because: T-..., L-...`. Budget 150 lines; archive to `TESTS-ARCHIVE.md`. Template: `templates/TESTS.md.template`.
 - `evergreen.json.tests`: `last_run`, `harness`, `env`, `cases`, `passed`, `failed`, `failing` (case ids), `last_failure`, `research_after_days`. A non-empty `failing` list is a Step 0 signal, like `contradiction`: the unit says "n failing tests; I'll tune after the task".
 
 `evergreen.py test-init <unit>` adds the layer to an existing unit; `init` adds it to every new skill. Units of kind doc, profile and map carry no tests.
@@ -42,7 +44,9 @@ Prose in the final message ("I delegated the task", "tests pass") counts for not
 4. On audit: `untested` (suite exists, never run) and `tests-overdue` (last run older than twice the unit's interval) are flags, not blockers; run the suite when the unit is next touched, or when the user asks.
 5. On conversion (`evergreen-convert`): scaffold the suite from the skill's description triggers; run it when the user agrees.
 
-Cost discipline: a suite is a few prompts, each run three times, in fresh contexts. Do not run it on every use.
+Cost discipline: a suite is a few prompts, each run three times, in fresh contexts. Do not run it on every use. When touching a suite, drop a case another case covers or whose behaviour is gone, and say so in the `T-` entry; keep any case that has caught a real failure.
+
+Fresh contexts have a blind spot: they cannot show a skill forgetting a step once the session is heavy. When a failure shows up late in long sessions and not in the suite, write a case that loads context first (several large reads before the prompt), rather than recording it as flaky.
 
 ## 5. The tuning loop
 
