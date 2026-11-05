@@ -460,6 +460,10 @@ Newest first. `Track` is subject, tooling, practice, or testing.
 - Magnitude: n/a (initial)
 - Applied: C-20260901-1 (PORTABILITY.md table and layout; templates/*.snippet)
 
+### R-20261104-1 · 2026-11-04 · A testing methodology book against this protocol
+Bach and Bolton, *Taking Testing Seriously* (Wiley 2025), about 17k of 202k words read. It supports the evidence rule from another direction (models misreport their own process, a pass means little unless a pass is unlikely without the behaviour). New here: state what a run cannot sense, oracles beyond a reference, wording sensitivity, load failures, pruning. Limits: its case against AI judges has no data, and evergreen's calibration answers it by measurement. It cites Shojaee et al. 2025 on sudden lapses as settled, and Lawsen 2025 disputes that paper (https://9to5mac.com/2025/06/13/new-paper-pushes-back-on-apples-llm-reasoning-collapse-study/), so the load case rests on the fresh-context logic, not on that paper. Book page: https://developsense.com/taking-testing-seriously-the-rapid-software-testing-approach
+applied: C-20261104-1
+
 ### R-20260901-7 · 2026-09-01 · Claude Code plugin and skill spec as of 2026-09
 - Summary: `.claude-plugin/plugin.json` needs `name` and `description`; `version`, `author`, `skills`, `agents`, `hooks`, `mcpServers` optional. SKILL.md frontmatter: `name`, `description` (1,536 chars), `when_to_use`, `disable-model-invocation`, `allowed-tools`, `tags`; keep under 500 lines with references on demand. `${CLAUDE_PLUGIN_ROOT}` is available to hook commands; `${CLAUDE_SKILL_DIR}` in skill markdown. Hook events include SessionStart (matchers startup/resume/clear/compact) whose stdout enters context. Auto-memory loads the first ~200 lines / 25 KB of MEMORY.md. `claude plugin validate` checks structure; `plugin eval` and `/skill-doctor` are early access. Cowork installs plugins as copies and `save_skill` skills as read-only caches.
 - Sources: https://code.claude.com/docs/en/plugins, https://code.claude.com/docs/en/plugins-reference, https://code.claude.com/docs/en/skills, https://code.claude.com/docs/en/hooks, https://code.claude.com/docs/en/memory
