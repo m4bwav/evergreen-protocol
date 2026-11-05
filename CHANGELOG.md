@@ -4,6 +4,10 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261105-1 · 2026-11-05 · Version 0.18.2: model-drafted eval cases start from risks
+because: Winteringham, Software Testing with Generative AI, sec. 5.1.1, 5.2.1 and 5.4: asking for test cases gives generic ones and fixes the kind of testing too early. Not yet run in a suite.
+files: skills/evergreen-test/SKILL.md (Step 2).
+
 ### C-20261031-1 · 2026-10-31 · evergreen-test: pin the judge, label graders, agent efficiency evidence
 - because: R-20261031-1
 - files: skills/evergreen-test/SKILL.md (Step 2 Action and Outcome, Step 3 judge)
