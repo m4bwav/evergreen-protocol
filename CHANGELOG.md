@@ -4,6 +4,10 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261106-1 · 2026-11-06 · Version 0.18.3: the A/B grader honours min and max on a trace
+because: a trace with `max: 0` passed when the banned call happened and failed when it did not, so a ban scored inverted in `worth --ab`; `eval-export` already writes these bounds for `claude plugin eval`.
+files: scripts/evergreen_ab.py (grade), scripts/test_evergreen.py, manifests.
+
 ### C-20261105-1 · 2026-11-05 · Version 0.18.2: model-drafted eval cases start from risks
 because: Winteringham, Software Testing with Generative AI, sec. 5.1.1, 5.2.1 and 5.4: asking for test cases gives generic ones and fixes the kind of testing too early. Not yet run in a suite.
 files: skills/evergreen-test/SKILL.md (Step 2).
