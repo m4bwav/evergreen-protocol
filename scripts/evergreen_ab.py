@@ -304,8 +304,12 @@ def grade(ev, run: Path, res: dict, variables: dict[str, str], base_commit: str 
     t = ev.get("type")
     if t == "trace":
         tool, pat, must = re.compile(f"^(?:{tool_regex(ev.get('tool'))})$"), ev.get("input_match"), ev.get("must_contain")
-        own = any(tool.match(str(u["name"])) and (not pat or re.search(pat, json.dumps(u["input"]), re.I)) and
-                  (not must or must in json.dumps(u["input"])) for u in res["uses"])
+        n = sum(1 for u in res["uses"] if tool.match(str(u["name"])) and (not pat or re.search(pat, json.dumps(u["input"]), re.I)) and
+                (not must or must in json.dumps(u["input"])))
+        # Same bounds as the tool_used grader eval-export writes; a max of 0 with no min bans the call.
+        hi = ev.get("max")
+        lo = ev.get("min", 0 if hi == 0 else 1)
+        own = n >= int(lo) and (hi is None or n <= int(hi))
     elif t == "sequence":
         i, own = 0, True
         for step in ev.get("steps") or []:
