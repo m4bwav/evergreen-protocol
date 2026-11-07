@@ -8,6 +8,10 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20261107-1 · 2026-11-07 · `worth skills/evergreen-test --ab --case action-7` (sonnet, 3 runs per arm, --setting-sources project) · owner-pc · 0/1
+- action-7 · action · undertrigger · the skill fired 0 of 3 with it present (it fired 2 of 3 on 2026-10-23); no run called `evergreen.py judge-sample`; all 6 runs, both arms, wrote their own sampling. Cost about $4.8. Next: evergreen-tune on the evergreen-test description (judge calibration wording), then re-run.
+- led to: none yet
+
 ### T-20261029-1 · 2026-10-29 · scripts/test_evergreen.py; scout commands against the installed everscout 0.6.0 · owner-pc · self-test green; model-run cases owed
 - 128 tests OK (1 skipped), five new in `Scout`: no everscout means no question and no state; offer, decline, then silence; create seeds the beat (scope, two questions, `--feeds evergreen:<unit>`) and links it, and leads say "scan first" for a never-scanned beat; link refuses a missing beat; detection reads `installed_plugins.json`.
 - Live: `scout detect` found the installed plugin; `scout offer` on an existing skill printed the question with the head of its topic.
