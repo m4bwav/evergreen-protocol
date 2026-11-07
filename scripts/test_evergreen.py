@@ -2486,5 +2486,19 @@ class Scout(unittest.TestCase):
         self.assertEqual(found[1], "plugin everscout@mark-local")
 
 
+class DiscoverWorktrees(unittest.TestCase):
+    def test_walk_skips_linked_worktrees_but_not_clones_or_submodules(self):
+        with tempfile.TemporaryDirectory() as t, unittest.mock.patch.object(eg, "load_registry", return_value={"units": []}):
+            root = Path(t)
+            gitfile = {"wt": "gitdir: D:\\x\\.git\\worktrees\\wt\n", "sub": "gitdir: ../.git/modules/sub\n"}
+            for name in ("clone", "wt", "sub"):
+                (root / name).mkdir()
+                (root / name / "evergreen.json").write_text("{}", encoding="utf-8")
+                if name in gitfile:
+                    (root / name / ".git").write_text(gitfile[name], encoding="utf-8")
+            self.assertEqual(sorted(p.name for p in eg.discover([root])), ["clone", "sub"])
+            self.assertEqual([p.name for p in eg.discover([root / "wt"])], ["wt"])  # started inside one, it is what you asked for
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

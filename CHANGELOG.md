@@ -4,6 +4,10 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261106-2 · 2026-11-06 · Version 0.18.4: the audit walk skips linked git worktrees
+because: merged worktrees under the working folder counted as extra units, so the session audit listed pixelwright four times and flagged `consolidate:69>25` when the real unit had 12 active entries.
+files: scripts/evergreen.py (discover, is_linked_worktree), scripts/test_evergreen.py, manifests. Registered paths and a walk started inside a worktree still count.
+
 ### C-20261106-1 · 2026-11-06 · Version 0.18.3: the A/B grader honours min and max on a trace
 because: a trace with `max: 0` passed when the banned call happened and failed when it did not, so a ban scored inverted in `worth --ab`; `eval-export` already writes these bounds for `claude plugin eval`.
 files: scripts/evergreen_ab.py (grade), scripts/test_evergreen.py, manifests.
