@@ -240,7 +240,7 @@ def probe(skill_dir: Path, unit: Path | None, prompt: str | None = None, out: st
     # a case prompt's <fixture> would make the probe discuss the placeholder instead of the job
     task = UNRESOLVED.sub(lambda m: f"the {m.group(0)[1:-1]} folder", task)
     anchors = key_anchors(body, name)
-    work = Path(tempfile.mkdtemp(prefix=f"probe-{name}-"))
+    work = Path(tempfile.mkdtemp(prefix="run-"))
     extra = isolation_args(blind) + ["--disable-slash-commands", "--max-turns", "2", "--tools", ""]
     if model:
         extra += ["--model", model]
@@ -458,7 +458,7 @@ def case_prompt(case: dict, variables: dict[str, str]) -> str:
 
 def one_run(case: dict, arm: str, n: int, skill_dir: Path, name: str, evals_home: Path, out: Path,
             variables: dict[str, str], model: str | None, blind: bool) -> dict:
-    run = Path(tempfile.mkdtemp(prefix=f"ab-{name}-{case['id']}-{arm}-{n}-"))
+    run = Path(tempfile.mkdtemp(prefix="run-"))
     base = prepare(case, evals_home, run)
     extra = isolation_args(blind) + ["--max-turns", str(case.get("max_turns") or MAX_TURNS.get(case["kind"], 20)),
                                      "--allowedTools", *(case.get("allowed_tools") or TOOLS.get(case["kind"], TOOLS["action"]) + list(case.get("tools") or []))]
