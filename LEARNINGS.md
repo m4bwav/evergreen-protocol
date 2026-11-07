@@ -6,6 +6,18 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-046 · 2026-11-07 · A decoy run with --skill-dir alone cannot pass when its right answer is a missing peer skill
+- Trigger: comfyui-gen decoy-1 ("90 second boss battle track") fired 3/3 in run-headless.mjs --skill-dir, before and after removing "music" from the description.
+- Hypothesis: with only the skill under test loaded, a request owned by a sibling (musicwright) has nowhere else to go.
+- Rule: a decoy whose correct route is another skill runs with that peer loaded; record a failure in isolation as "needs peer", never tune on it.
+- Evidence: comfyui-gen TESTS.md T-20261107-1 (PR #194).
+
+### L-045 · 2026-11-07 · Under WSL2 `claude plugin eval` 2.1.316 every Bash call returned exit 1, so Bash graders count 0
+- Trigger: editwright action-4 and pixelwright action-1 scored "Bash called 0x" in both arms; a kept trace showed Bash calls (`ls -la`, `cat`) whose results all read "Exit code 1" with normal output.
+- Hypothesis: the WSL sandbox marks every Bash result as an error, and the tool_used grader counts only successful calls.
+- Rule: before paying for Bash action cases under WSL, run one with `--runs 1 --keep-temp` and read the trace in the same `wsl` call (the /tmp folder is gone in the next call); a 0x Bash count with Skill fired is a harness fault, not a result.
+- Evidence: evergreen-upkeep HANDOFF.md session 12. Retire when a WSL run shows Bash exit 0.
+
 ### L-044 · 2026-10-29 · A test stub that prints only the lines the parser wants hides the parser's bug
 - Trigger: the first real `scout create` (on a new game design plugin) crashed with "list index out of range" after everscout had created the beat; the unit stayed unlinked.
 - Hypothesis: `everscout.py where --beat` prints `BEATS <folder>` lines before `BEAT <slug> = <path>`, and `startswith("BEAT")` matched the folder line first. The stub printed only the BEAT line, so the self-test passed.
