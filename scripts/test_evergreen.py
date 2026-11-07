@@ -1572,6 +1572,12 @@ def result_file(folder: Path, with_runs, without_runs, cost_with=0.2, cost_witho
 
 
 class Worth(unittest.TestCase):
+    def test_ab_run_folder_does_not_name_the_skill(self):
+        # A baseline read "sfxwright" in its folder name, searched the disk and used the installed plugin (2026-11-07).
+        src = (Path(__file__).parent / "evergreen_ab.py").read_text(encoding="utf-8")
+        self.assertNotIn('mkdtemp(prefix=f"ab-', src)
+        self.assertNotIn('mkdtemp(prefix=f"probe-', src)
+
     """The worth check: static signals, the A/B verdict, recording, the edit check and the hook (TESTING.md section 8)."""
 
     def setUp(self):

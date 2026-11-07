@@ -4,6 +4,10 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261107-1 · 2026-11-07 · Version 0.18.5: A/B run folders no longer name the skill
+because: a sfxwright baseline read the skill's name in its temp folder (`ab-sfxwright-...`), searched the disk, found the installed plugin and used it, so the without arm was not without. Baselines measured before this version may be contaminated the same way when the skill is installed.
+files: scripts/evergreen_ab.py, scripts/test_evergreen.py
+
 ### C-20261106-2 · 2026-11-06 · Version 0.18.4: the audit walk skips linked git worktrees
 because: merged worktrees under the working folder counted as extra units, so the session audit listed pixelwright four times and flagged `consolidate:69>25` when the real unit had 12 active entries.
 files: scripts/evergreen.py (discover, is_linked_worktree), scripts/test_evergreen.py, manifests. Registered paths and a walk started inside a worktree still count.
