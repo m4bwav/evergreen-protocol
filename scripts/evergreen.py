@@ -740,6 +740,15 @@ def default_roots() -> list[Path]:
     return out
 
 
+def is_linked_worktree(d: Path) -> bool:
+    """A `git worktree add` checkout: .git is a file pointing into the main clone's worktrees folder (a submodule's points into modules)."""
+    try:
+        text = (d / ".git").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return text.startswith("gitdir:") and "/worktrees/" in text.replace("\\", "/")
+
+
 def discover(roots: list[Path], max_depth: int = 4) -> list[Path]:
     found: dict[str, Path] = {}
     for u in load_registry().get("units", []):
@@ -751,6 +760,9 @@ def discover(roots: list[Path], max_depth: int = 4) -> list[Path]:
         root = Path(root)
         base_depth = len(root.parts)
         for dirpath, dirnames, filenames in os.walk(root):
+            if ".git" in filenames and Path(dirpath) != root and is_linked_worktree(Path(dirpath)):  # a stale copy of a unit, not a unit; walking from inside one still works
+                dirnames[:] = []
+                continue
             dirnames[:] = [x for x in dirnames if (x not in skip and not x.startswith(".")) or x in (".claude", ".agents")]
             if len(Path(dirpath).parts) - base_depth >= max_depth:
                 dirnames[:] = []
