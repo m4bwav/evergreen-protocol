@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261109-1 · 2026-11-09 · Version 1.0.0: stable
+because: user request; the protocol, CLI and skills have held steady across the 0.18 series.
+files: plugin.json, .claude-plugin/plugin.json
+No change in behaviour from 0.18.5. Breaking changes to the protocol or `evergreen.py` commands will need a 2.0.
+
 ### C-20261107-1 · 2026-11-07 · Version 0.18.5: A/B run folders no longer name the skill
 because: a sfxwright baseline read the skill's name in its temp folder (`ab-sfxwright-...`), searched the disk, found the installed plugin and used it, so the without arm was not without. Baselines measured before this version may be contaminated the same way when the skill is installed.
 files: scripts/evergreen_ab.py, scripts/test_evergreen.py
