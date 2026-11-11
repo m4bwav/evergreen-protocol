@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261110-1 · 2026-11-10 · Version 1.1.0: per-unit harvest targets
+because: user request: a technique harvest's list of communities keeps growing and belongs with the units it feeds, the way a beat does, so each plugin stores the targets it is harvested from.
+files: scripts/evergreen_harvest.py (new), scripts/evergreen.py (wiring), scripts/test_evergreen.py, protocol/PROTOCOL.md (§8 "Harvest targets"), skills/evergreen-new/SKILL.md, AGENTS.md, manifests.
+Optional `harvest.json` per unit; `evergreen.py harvest targets|lint|add`. Additive: units without the file behave as before.
+
 ### C-20261109-1 · 2026-11-09 · Version 1.0.0: stable
 because: user request; the protocol, CLI and skills have held steady across the 0.18 series.
 files: plugin.json, .claude-plugin/plugin.json

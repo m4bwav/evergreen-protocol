@@ -2506,5 +2506,59 @@ class DiscoverWorktrees(unittest.TestCase):
             self.assertEqual([p.name for p in eg.discover([root / "wt"])], ["wt"])  # started inside one, it is what you asked for
 
 
+
+import argparse  # noqa: E402
+import evergreen_harvest as eh  # noqa: E402
+
+
+class HarvestTargetsTest(unittest.TestCase):
+    def _unit(self, root, name, targets):
+        d = root / name
+        d.mkdir()
+        (d / "evergreen.json").write_text(json.dumps({"name": name}), encoding="utf-8")
+        if targets is not None:
+            (d / "harvest.json").write_text(json.dumps({"version": 1, "targets": targets}), encoding="utf-8")
+        return d
+
+    def test_urls_and_ids(self):
+        t = {"kind": "reddit", "sub": "comfyui"}
+        self.assertEqual(eh.target_url(t), "https://www.reddit.com/r/comfyui/top/.rss?t=month&limit=100")
+        self.assertEqual(eh.target_id(t), "reddit/comfyui")
+        self.assertEqual(eh.target_id({"kind": "hn", "query": "pixel art"}), "hn/pixel-art")
+        self.assertEqual(eh.target_id({"kind": "web", "url": "https://www.lospec.com/"}), "web/lospec.com")
+
+    def test_problems(self):
+        self.assertEqual(eh.problems({"targets": [{"kind": "reddit", "sub": "PixelArt"}]}), [])
+        bad = eh.problems({"targets": [{"kind": "reddit"}, {"kind": "web"}, {"kind": "x"},
+                                       {"kind": "hn", "query": "a", "weight": "huge"}]})
+        self.assertEqual(len(bad), 4)
+        self.assertTrue(eh.problems({"targets": [{"kind": "reddit", "sub": "a1"}, {"kind": "reddit", "sub": "A1"}]}))
+
+    def test_merge_dedupes_and_takes_highest_weight(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            a = self._unit(root, "pixel", [{"kind": "reddit", "sub": "PixelArt", "weight": "low", "keep": "cleanup"},
+                                           {"kind": "reddit", "sub": "comfyui"}])
+            b = self._unit(root, "video", [{"kind": "reddit", "sub": "comfyui", "weight": "core", "keep": "H3"}])
+            c = self._unit(root, "plain", None)
+            rows = eh.merged([a, b, c])
+            self.assertEqual([r["id"] for r in rows], ["reddit/comfyui", "reddit/pixelart"])
+            self.assertEqual(rows[0]["weight"], "core")
+            self.assertEqual(rows[0]["units"], ["pixel", "video"])
+            self.assertEqual(rows[0]["keep"], ["H3"])
+
+    def test_add_writes_and_skips_duplicates(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = self._unit(Path(t), "u", None)
+            ns = lambda **k: argparse.Namespace(**{**dict(unit=str(d), kind="reddit", sub="r/FluxAI", url=None,
+                                                        query=None, id=None, weight="normal", keep=None), **k})
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(eh.cmd_add(ns()), 0)
+                self.assertEqual(eh.cmd_add(ns()), 0)
+                self.assertEqual(eh.cmd_add(ns(kind="web", sub=None)), 1)
+            self.assertEqual(json.loads((d / "harvest.json").read_text(encoding="utf-8"))["targets"],
+                             [{"kind": "reddit", "sub": "FluxAI"}])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
