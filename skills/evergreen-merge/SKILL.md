@@ -1,6 +1,6 @@
 ---
 name: evergreen-merge
-description: "Land what other evergreen clones published into the trunk repository: review and merge the plugin's update pull requests on the host (gh), resolve the rare conflict with the delta-edit rule (the logs merge by union; a duplicate entry ID is renumbered), then pull every clone and reinstall where skills or scripts changed. Also folds an email update bundle (a folder, a changes.patch, or the update email saved as text) into the trunk for the fallback route. Use on 'merge the update', 'merge the evergreen PR', 'review the pull requests from the plugin', 'the rebase conflicted', 'apply the patch from work', 'pull in the changes from the email', 'sync the trunk', or when a pull request or update email from another machine has arrived."
+description: "Land other clones' evergreen updates in the trunk: review and merge update PRs (gh), resolve conflicts by the delta-edit rule (logs union, duplicate IDs renumbered), pull every clone and reinstall; also fold in an email update bundle or patch. Use on 'merge the update', 'merge the evergreen PR', 'review the pull requests from the plugin', 'the rebase conflicted', 'apply the patch from work', 'pull in the changes from the email', 'sync the trunk', or when an update PR or email arrives."
 ---
 
 # Evergreen merge

@@ -4,6 +4,11 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261114-1 · 2026-11-14 · Version 1.1.1: shorter skill descriptions
+because: user request: the skill listing is paid every session; evergreen-wrapup was over the 1,024-character spec limit and ten others ran 700 to 1,000 characters.
+files: skills/evergreen-{wrapup,setup,worth,test,map,publish,merge,tune,learn,notify,audit}/SKILL.md (description only), manifests.
+Every quoted trigger kept (checked with tokenwright-catalog `tidy.py check`); all eleven now 460 to 775 characters. evergreen-audit gains a boundary sentence: read-only survey across all units, one named unit goes to evergreen-refresh.
+
 ### C-20261110-1 · 2026-11-10 · Version 1.1.0: per-unit harvest targets
 because: user request: a technique harvest's list of communities keeps growing and belongs with the units it feeds, the way a beat does, so each plugin stores the targets it is harvested from.
 files: scripts/evergreen_harvest.py (new), scripts/evergreen.py (wiring), scripts/test_evergreen.py, protocol/PROTOCOL.md (§8 "Harvest targets"), skills/evergreen-new/SKILL.md, AGENTS.md, manifests.
