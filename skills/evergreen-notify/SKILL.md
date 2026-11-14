@@ -1,6 +1,6 @@
 ---
 name: evergreen-notify
-description: "The email fallback for publishing the evergreen plugin's self-update when a machine cannot reach the trunk git repository (update.transport email): mail the digest and diff to the owner (notify.to in evergreen.config.json) through the script's ladder (classic Outlook COM, Microsoft Graph, Gmail SMTP with an app password), then agent-driven routes (a Gmail connector, Claude in Chrome with the Drive picker), then the outbox. Use on 'email me the changes', 'send the evergreen update by email', 'did the update email go out', 'the notify failed', 'set up the update email', 'this machine cannot push', or when a session-end hook reports an unsent bundle. Pushing to the repository is evergreen-publish."
+description: "Email fallback for the evergreen self-update when a machine cannot reach the trunk repo: mails digest and diff to the owner via Outlook COM, Microsoft Graph, Gmail SMTP, a Gmail connector or Chrome, else the outbox. Use on 'email me the changes', 'send the evergreen update by email', 'did the update email go out', 'the notify failed', 'set up the update email', 'this machine cannot push', or when a hook reports an unsent bundle. Pushing is evergreen-publish."
 ---
 
 # Evergreen notify

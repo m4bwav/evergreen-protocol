@@ -1,6 +1,6 @@
 ---
 name: evergreen-map
-description: "Build or update the plugin's own codemap of a repository or system while exploring it, so the exploration is never repeated. Use when the user asks how an unfamiliar or recurring codebase, service, or system is put together ('walk me through this repo', 'what talks to what', 'where is Y configured', 'how does X handle auth' in a repo you will plausibly see again), when you are about to grep around an unfamiliar repo, or on 'map this repo', 'update the codemap', 'is the map stale'. Before answering from an existing map, check drift first: maps can be out of date, incomplete, or confused. Not for one-off questions in a repo with no future, and not a replacement for a repo-specific skill that already covers that repo (use both: the specific skill for the task, this one to keep the map current)."
+description: "Build or update a codemap of a repository or system while exploring it, so exploration is never repeated. Use when asked how a recurring codebase fits together ('walk me through this repo', 'what talks to what', 'where is Y configured', 'how does X handle auth'), before grepping around an unfamiliar repo, or on 'map this repo', 'update the codemap', 'is the map stale'. Check drift before trusting a map. Not for one-off repos; alongside, not instead of, a repo-specific skill."
 ---
 
 # Evergreen map

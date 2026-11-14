@@ -1,6 +1,6 @@
 ---
 name: evergreen-tune
-description: "Fix a skill or plugin that failed a test or failed in use: it did not trigger, it described an action without performing it (said it delegated, never delegated), it did the job by a forbidden route, or it produced the wrong result. Reproduces the failure in a fresh context, classifies it, writes the learning, researches the subject's testing and tooling when the unit's research is stale, makes the smallest edit, and re-runs the suite. Use on 'X didn't do Y', 'the skill never delegated', 'the skill didn't trigger', 'fix this skill', 'tune X', 'why did X fail', 'X keeps doing it wrong', or when evergreen-test reports a failure or a unit shows failing tests. Not for application bugs; that is the repo's job."
+description: "Fix a skill that failed a test or in use: did not trigger, described an action without doing it, used a forbidden route, or gave the wrong result. Reproduces in a fresh context, classifies, writes the learning, researches if stale, makes the smallest edit, re-runs the suite. Use on 'X didn't do Y', 'the skill never delegated', 'the skill didn't trigger', 'fix this skill', 'tune X', 'why did X fail', 'X keeps doing it wrong', or when evergreen-test reports a failure. Not for application bugs."
 ---
 
 # Evergreen tune

@@ -1,6 +1,6 @@
 ---
 name: evergreen-publish
-description: "Publish the evergreen plugin's self-changes (refreshes, learnings, environment facts, test runs) to the trunk git repository: a maintainer's clone commits and pushes straight to master, anyone else's clone pushes an update branch and opens a pull request; then bring a clone up to date with `pull`. Use on 'push the evergreen changes', 'publish the update', 'sync evergreen', 'open a PR for the plugin changes', 'pull the latest evergreen', 'is my evergreen clone behind', 'did the push go out', 'the publish failed', or when evergreen-refresh, evergreen-learn, evergreen-test, or a session-end hook reports unpublished changes. Email is the fallback route (evergreen-notify) for a machine that cannot reach the repository."
+description: "Publish the evergreen plugin's self-changes (refreshes, learnings, environment facts, test runs) to the trunk repo: maintainers push to master, others push a branch and open a PR; `pull` updates a clone. Use on 'push the evergreen changes', 'publish the update', 'sync evergreen', 'open a PR for the plugin changes', 'pull the latest evergreen', 'is my evergreen clone behind', 'did the push go out', 'the publish failed', or when a hook or skill reports unpublished changes. No repo access: evergreen-notify."
 ---
 
 # Evergreen publish

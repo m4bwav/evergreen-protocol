@@ -1,6 +1,6 @@
 ---
 name: evergreen-learn
-description: "Capture a lesson so no one has to teach the agent the same thing twice: user corrections ('no, actually...', 'I told you before', 'remember that', 'stop doing X'), the same error or failed approach happening a second time, a discovered workaround, an environment fact (path, port, tool quirk, what works where), or a stated preference about how work should be done. Use proactively the moment any of these happens, not at the end of the session, and for 'save that as a learning', 'note that for next time', 'consolidate the learnings', or an end-of-task reflection. Routes the entry to the right file (skill, codemap, environment profile, or preferences profile) and mirrors a pointer into native memory."
+description: "Capture a lesson so the agent is never taught it twice: user corrections ('no, actually...', 'I told you before', 'remember that', 'stop doing X'), a repeated error, a workaround, an environment fact (path, port, tool quirk), or a work preference. Use when it happens, at that moment, and on 'save that as a learning', 'note that for next time', 'consolidate the learnings'. Routes it to the skill, codemap or profile file and mirrors a pointer into native memory."
 ---
 
 # Evergreen learn
