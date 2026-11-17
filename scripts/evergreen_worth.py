@@ -11,7 +11,7 @@ Two kinds of evidence, cheapest first (protocol/TESTING.md section 8):
            for the action and outcome cases: pass rate with against without, and what the gain cost in dollars,
            turns and time. This is the proof, and when present it decides the verdict.
 
-  usage    Skill calls in Claude Code's own transcripts over 60 days, split into interactive sessions, subagents and
+  usage    Skill calls and calls of the skill's scripts in Claude Code's own transcripts over 60 days, split into interactive sessions, subagents and
            headless runs (`claude -p`, the SDK: evals and scripts), so test traffic never counts as use.
   evidence what the unit's evals.json already knows: how many value cases the skill owns, which baselines passed,
            failed or were never run, and which cases pass only on the skill's own script (a process grader).
@@ -367,6 +367,68 @@ def transcript_uses(days: int = USAGE_DAYS) -> dict[str, dict]:
     return out
 
 
+SCRIPT_RE = re.compile(r"\b[\w.-]+\.(?:py|sh|ps1|js|mjs|ts)\b")
+_SCRIPT_USES: dict[tuple, dict] = {}
+
+
+def skill_scripts(skill_md: Path, text: str) -> list[str]:
+    """Script file names a skill runs: files in its own scripts/ folder plus scripts its SKILL.md names (a hub's
+    shared script counts for every skill that tells the agent to run it). Tests and fixture makers are left out."""
+    names = {p.name for p in (skill_md.parent / "scripts").glob("*") if p.is_file() and SCRIPT_RE.fullmatch(p.name)}
+    names |= {m.group(0).split("/")[-1] for m in SCRIPT_RE.finditer(text)}
+    return sorted(n for n in names if not n.startswith(("test_", "make_")))
+
+
+def script_uses(names: list[str], days: int = USAGE_DAYS) -> dict:
+    """Interactive Bash or PowerShell calls that run one of `names`, from the same transcripts as transcript_uses.
+    A skill whose work is a script is often used by calling the script directly with no Skill call at all
+    (tokenwright, 2026-11-17: tw.py in 57 sessions in 60 days, 0 Skill calls), so Skill calls alone undercount it.
+    Subagent files, headless runs and runs in a temp folder are left out, as for Skill calls."""
+    key = (tuple(names), days)
+    if key in _SCRIPT_USES:
+        return _SCRIPT_USES[key]
+    out = {"script_calls": 0, "script_sessions": 0}
+    pat = re.compile(r"(?<![\w.-])(?:" + "|".join(re.escape(n) for n in names) + r")\b") if names else None
+    root = claude_dir() / "projects"
+    cut = datetime.now().timestamp() - days * 86400
+    for f in (root.glob("**/*.jsonl") if root.exists() and pat else []):
+        if "subagents" in f.parts:
+            continue
+        try:
+            if f.stat().st_mtime < cut:
+                continue
+            fh = f.open(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        entry, cwd, hit = None, None, 0
+        with fh:
+            for line in fh:
+                if entry is None and '"entrypoint"' in line:
+                    m = re.search(r'"entrypoint"\s*:\s*"([^"]+)"', line)
+                    entry = m.group(1) if m else None
+                if cwd is None and '"cwd"' in line:
+                    m = re.search(r'"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"', line)
+                    cwd = json.loads(f'"{m.group(1)}"') if m else None
+                if '"tool_use"' not in line or not pat.search(line):
+                    continue
+                try:
+                    o = json.loads(line)
+                except ValueError:
+                    continue
+                if o.get("isSidechain") or o.get("type") != "assistant":
+                    continue
+                content = (o.get("message") or {}).get("content")
+                for c in content if isinstance(content, list) else []:
+                    if (isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") in ("Bash", "PowerShell")
+                            and pat.search(str((c.get("input") or {}).get("command") or ""))):
+                        hit += 1
+        if hit and not (str(entry or "").startswith("sdk") or in_temp(cwd)):
+            out["script_calls"] += hit
+            out["script_sessions"] += 1
+    _SCRIPT_USES[key] = out
+    return out
+
+
 def skill_age_days(skill_md: Path) -> int | None:
     """Days since SKILL.md was first committed (None outside git): a young skill has not had its chance to be used."""
     first = eg.git(["log", "--follow", "--diff-filter=A", "--format=%as", "--", skill_md.name], skill_md.parent)
@@ -513,6 +575,7 @@ def static_report(skill_md: Path, against: str | None = None, peers: bool = True
             r["uses_30d"] = len(eg.read_uses(name, days=30))
         r["usage"] = {"days": USAGE_DAYS, **transcript_uses(USAGE_DAYS).get(
             name, {"interactive": 0, "subagent": 0, "headless": 0, "sessions": 0, "last": None})}
+        r["usage"].update(script_uses(skill_scripts(skill_md, text), USAGE_DAYS))
         r["installed"] = installed_as(name)
         r["age_days"] = skill_age_days(skill_md)
     score = len(w)
@@ -699,9 +762,9 @@ def failure_modes(st: dict, ev: dict | None, ab: dict | None, manual: dict | Non
     """The useless-skill failure modes the evidence points to (TESTING.md section 8), each with its evidence."""
     modes = []
     u, inst, age = st.get("usage"), st.get("installed"), st.get("age_days")
-    if u is not None and inst and u["interactive"] + u["subagent"] == 0 and (age is None or age >= NEVER_FIRES_MIN_AGE_DAYS):
+    if u is not None and inst and u["interactive"] + u["subagent"] + u.get("script_calls", 0) == 0 and (age is None or age >= NEVER_FIRES_MIN_AGE_DAYS):
         modes.append({"mode": 1, "name": "never fires",
-                      "evidence": f"installed ({inst}) and no Skill call in {u['days']} days of transcripts"
+                      "evidence": f"installed ({inst}) and no Skill call or script call in {u['days']} days of transcripts"
                                   + (f" ({u['headless']} headless test runs only)" if u["headless"] else "")})
     if ev and ev["value_cases"]:
         known = [c for c in ev["value_cases"] if c not in ev["baseline"]["not-run"] + ev["baseline"]["described"]]
@@ -905,7 +968,8 @@ def assess(target: Path, against: str | None = None, results: list[str] | None =
         # a recorded A/B (worth --record) measured the baseline even when its result files are elsewhere
         st["gaps"] = evidence_gaps(ev, ab or (manual if manual and manual.get("delta") is not None else None))
         u = st.get("usage") or {}
-        st["triage"] = round((st["listing_tokens"] + st["body_tokens"]) / (u.get("interactive", 0) + u.get("subagent", 0) + 1))
+        st["triage"] = round((st["listing_tokens"] + st["body_tokens"]) / (u.get("interactive", 0) + u.get("subagent", 0)
+                                                                       + u.get("script_calls", 0) + 1))
         out.append(st)
     return out
 
@@ -941,6 +1005,7 @@ def render(r: dict) -> str:
     if u is not None:
         L.append(f"  uses     {u['interactive']} interactive ({u['sessions']} sessions), {u['subagent']} subagent, "
                  f"{u['headless']} headless in {u['days']} days (transcripts)"
+                 + (f" · {u['script_calls']} script calls in {u['script_sessions']} sessions" if u.get("script_calls") else "")
                  + (f" · last {u['last']}" if u.get("last") else "")
                  + f" · {'loaded as ' + r['installed'] if r.get('installed') else 'not installed here'}"
                  + (f" · {r['uses_30d']} in 30 days (use log)" if r.get("uses_30d") is not None else ""))
@@ -978,7 +1043,7 @@ def render_lite(r: dict) -> str:
     u = r.get("usage") or {}
     ev = r.get("evidence") or {}
     L = [f"lite   {r['skill']}: {r['verdict']}  (listing ~{r['listing_tokens']:,} every session, body ~{r['body_tokens']:,} "
-         f"per use; {u.get('interactive', 0)} interactive + {u.get('subagent', 0)} subagent uses in {u.get('days', USAGE_DAYS)} "
+         f"per use; {u.get('interactive', 0)} interactive + {u.get('subagent', 0)} subagent uses + {u.get('script_calls', 0)} script calls in {u.get('days', USAGE_DAYS)} "
          f"days; {len(ev.get('value_cases') or [])} value case(s))"]
     rec = recorded(Path(r["unit"]), r["skill"]) if r.get("unit") else None
     if rec and not r.get("ab"):  # the last measured verdict, so a quick scan does not read as never tested
