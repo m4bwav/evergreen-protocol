@@ -1723,6 +1723,7 @@ class WorthUseful(unittest.TestCase):
         os.environ["EVERGREEN_HOME"] = str(self.t / "home")
         os.environ["CLAUDE_CONFIG_DIR"] = str(self.t / "claude")
         ew._USES.clear()
+        ew._SCRIPT_USES.clear()
 
     def tearDown(self):
         for k, v in self.env.items():
@@ -1756,6 +1757,31 @@ class WorthUseful(unittest.TestCase):
         self.assertEqual((u["alpha"]["interactive"], u["alpha"]["headless"], u["alpha"]["sessions"]), (2, 2, 1))
         self.assertEqual((u["beta"]["interactive"], u["beta"]["subagent"]), (1, 1))
         self.assertEqual(u["alpha"]["last"], "2026-09-29")
+
+    def test_script_calls_count_as_use(self):
+        def bash(cmd, **extra):
+            return {"type": "assistant", "timestamp": "2026-09-29T10:00:00Z", **extra,
+                    "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": cmd}}]}}
+        work = os.path.abspath(os.sep + "work-not-temp")
+        self.transcript("a.jsonl", [{"type": "user", "entrypoint": "claude-vscode", "cwd": work, "message": {"content": "x"}},
+                                    bash("python skills/x/scripts/tw.py score s.jsonl"), bash("python tw.py diff a"),
+                                    bash("python mytw.py nope"), bash("python tw.py y", isSidechain=True)])
+        self.transcript("b.jsonl", [{"type": "user", "entrypoint": "sdk-cli", "message": {"content": "x"}}, bash("tw.py z")])
+        self.transcript("c.jsonl", [{"type": "user", "entrypoint": "claude-vscode", "cwd": work, "message": {"content": "x"}},
+                                    bash("tw.py score")])
+        u = ew.script_uses(["tw.py"], 60)
+        self.assertEqual((u["script_calls"], u["script_sessions"]), (3, 2))
+        sk = self.t / "repo" / "skills" / "me"
+        (sk / "scripts").mkdir(parents=True)
+        (sk / "scripts" / "own.py").write_text("", encoding="utf-8")
+        (sk / "scripts" / "test_own.py").write_text("", encoding="utf-8")
+        self.assertEqual(ew.skill_scripts(sk / "SKILL.md", "Run `python3 ../hub/scripts/tw.py skill <dir>`."),
+                         ["own.py", "tw.py"])
+        st = {"usage": {"days": 60, "interactive": 0, "subagent": 0, "headless": 0, "script_calls": 3},
+              "installed": "plugin p@m", "age_days": 90}
+        self.assertFalse([m for m in ew.failure_modes(st, None, None) if m["mode"] == 1])
+        st["usage"]["script_calls"] = 0
+        self.assertTrue([m for m in ew.failure_modes(st, None, None) if m["mode"] == 1])
 
     def test_peers_come_from_enabled_plugins_only(self):
         c = self.t / "claude"
