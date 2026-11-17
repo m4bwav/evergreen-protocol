@@ -40,12 +40,12 @@ Entry:
 - Trigger: <what happened, dates or counts>
 - Hypothesis: <why>
 - Rule: <shortest instruction that prevents the trigger>
-- Evidence: <C-/R- IDs, commits, sections; confirmed dates>
+- Evidence: <where the proof lives: log line, command output, PR or commit, transcript date, C-/R- IDs; confirmed dates>
 - Scope: skill | repo:<slug> | env:<name> | global
 - Status: active · helpful 0 · harmful 0 · last_confirmed <today>
 ```
 
-Trigger and Hypothesis are required. Then `EG bump <unit> --learnings`. When the unit is the plugin (its own LEARNINGS.md or `profile/`), `bump` also publishes the self-update where this install said yes to contributing (`[notify] ...` in its output).
+Trigger and Hypothesis are required; give Evidence whenever there is any. When two learnings conflict, or one came from a failed attempt, open its Evidence before acting on it (after WikiTrace, https://huggingface.co/papers/2611.14320: lessons cut loose from their evidence make agents fail tasks they solve without memory). Then `EG bump <unit> --learnings`. When the unit is the plugin (its own LEARNINGS.md or `profile/`), `bump` also publishes the self-update where this install said yes to contributing (`[notify] ...` in its output).
 
 If the learning proves a claim in the unit's main file wrong: fix the main file now (delta edit), log a `C-` entry `because: L-<id>`, and `EG flag <unit> --contradiction "<why>"` so the next refresh re-verifies the neighborhood.
 
