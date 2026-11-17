@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261117-1 · 2026-11-17 · Version 1.1.2: tune never edits its own case; evidence on learnings
+because: technique harvest D14 (Claude Code team on verification, https://claude.dev/blog/how-the-claude-code-team-thinks-about-verification/) and D18 (WikiTrace evidence-linked memory, https://huggingface.co/papers/2611.14320).
+files: protocol/TESTING.md (§5 steps 5, 7, 8), skills/evergreen-tune/SKILL.md (Steps 5, 6), skills/evergreen-learn/SKILL.md (Step 3), manifests.
+A tune edit never changes the case it fixes in the same commit; after three failed rounds the call goes on an askwright page; every C- entry ends with `verified:`. Learnings' Evidence field names the proof, and is opened when learnings conflict or one came from a failed attempt.
+verified: python scripts/test_evergreen.py
+
 ### C-20261114-1 · 2026-11-14 · Version 1.1.1: shorter skill descriptions
 because: user request: the skill listing is paid every session; evergreen-wrapup was over the 1,024-character spec limit and ten others ran 700 to 1,000 characters.
 files: skills/evergreen-{wrapup,setup,worth,test,map,publish,merge,tune,learn,notify,audit}/SKILL.md (description only), manifests.

@@ -57,7 +57,7 @@ A failure that does not reproduce in three runs is `flaky`: record the traces in
 - `environment`: a precondition check at the top of the skill (what to verify, what to tell the user when it fails) plus the profile learning from Step 3.
 - `harness`: fix the case, not the skill.
 
-Edit in place, delta only. One class, one edit, then re-run; do not stack fixes before measuring. Never open a case marked `"holdout": true` (prompt, graders or fixture) before the edit is made: an edit chosen while reading every case can fit those cases and nothing else.
+Edit in place, delta only. Never change the case being fixed in the same commit as the skill edit (only the `harness` class edits a case, and then not the skill). One class, one edit, then re-run; do not stack fixes before measuring. Never open a case marked `"holdout": true` (prompt, graders or fixture) before the edit is made: an edit chosen while reading every case can fit those cases and nothing else.
 
 ## Step 6: re-run and record
 
@@ -71,7 +71,9 @@ Write the `T-` entry in TESTS.md with `led to: L-..., C-..., R-...`; log the `C-
 
 After a clean run, `EG worth <skill> --against HEAD` (TESTING.md §8): a fix that passes by adding mostly general text is worth a second, shorter try. A baseline that keeps winning is the `evergreen-worth` CUT case: recommend retiring, do not keep tuning.
 
-Still failing: next iteration from Step 2 with the new evidence. After the third, stop.
+Still failing: next iteration from Step 2 with the new evidence. After the third, stop and put the call (retire, delegate or keep tuning) on an askwright page when askwright is installed, else ask in the report.
+
+End every `C-` entry with `verified: <suite run, T- id or evidence>` or `verified: none`.
 
 ## Step 7: report
 
