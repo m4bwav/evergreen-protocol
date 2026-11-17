@@ -4,10 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
-### C-20261117-1 · 2026-11-17 · Version 1.1.2: worth counts a skill's script calls as use
-because: a tokenwright worth lite scan (tokenwright T-20261117-2) found tw.py run in 57 sessions in 60 days with 0 Skill calls, so worth reported "never fires" for skills that are used every day through their script.
+### C-20261117-2 · 2026-11-17 · Version 1.1.3: worth counts a skill's script calls as use
+because: a tokenwright worth lite scan (tokenwright's TESTS.md run of 2026-11-17) found tw.py run in 57 sessions in 60 days with 0 Skill calls, so worth reported "never fires" for skills that are used every day through their script.
 files: scripts/evergreen_worth.py (skill_scripts, script_uses, failure mode 1, triage, both renders), scripts/test_evergreen.py, manifests.
 Usage now adds interactive Bash or PowerShell calls that run a script in the skill's scripts/ folder or a script its SKILL.md names, with subagents, headless runs and temp folders left out as for Skill calls. Mode 1 needs no Skill call and no script call. A hub's shared script counts for every skill that names it, so script calls are an upper bound on use.
+verified: python scripts/test_evergreen.py
+
 ### C-20261117-1 · 2026-11-17 · Version 1.1.2: tune never edits its own case; evidence on learnings
 because: technique harvest D14 (Claude Code team on verification, https://claude.dev/blog/how-the-claude-code-team-thinks-about-verification/) and D18 (WikiTrace evidence-linked memory, https://huggingface.co/papers/2611.14320).
 files: protocol/TESTING.md (§5 steps 5, 7, 8), skills/evergreen-tune/SKILL.md (Steps 5, 6), skills/evergreen-learn/SKILL.md (Step 3), manifests.
