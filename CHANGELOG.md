@@ -2,7 +2,13 @@
 
 Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scripts/`, `templates/`, `profile/`, `evals/`), newest first, with the reason. Reasons cite [RESEARCH.md](RESEARCH.md) findings (`R-`), [LEARNINGS.md](LEARNINGS.md) lessons (`L-`) and [TESTS.md](TESTS.md) runs (`T-`). State in `evergreen.json`. Protocol: `protocol/PROTOCOL.md`.
 
-Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
+Entry shape: `### C-20261118-1 · 2026-11-18 · Version 1.1.4: popular-repos query targets and `harvest top`
+because: user request (2026-11-18): each plugin keeps its own popular-repos list on its topic, and each harvest should print the repos new to that list.
+files: scripts/evergreen_harvest.py (github `query` targets, `harvest top`), scripts/test_evergreen.py, protocol/PROTOCOL.md (§8 "Harvest targets"), manifests.
+A `github` target with `query` and no `url` is a top-repos-by-stars search (id `github-top/<slug>`; a `sort:stars` qualifier is dropped since the API sorts by parameter). `harvest top` fetches each one through `gh api` (or the public API with GITHUB_TOKEN), diffs it against the last run in `EVERGREEN_HOME/harvest-top.json` and marks NEW entrants; `--no-save` previews.
+verified: python scripts/test_evergreen.py (136 tests OK)
+
+### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
 ### C-20261117-2 · 2026-11-17 · Version 1.1.3: worth counts a skill's script calls as use
 because: a tokenwright worth lite scan (tokenwright's TESTS.md run of 2026-11-17) found tw.py run in 57 sessions in 60 days with 0 Skill calls, so worth reported "never fires" for skills that are used every day through their script.

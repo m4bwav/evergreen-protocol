@@ -2585,6 +2585,27 @@ class HarvestTargetsTest(unittest.TestCase):
             self.assertEqual(json.loads((d / "harvest.json").read_text(encoding="utf-8"))["targets"],
                              [{"kind": "reddit", "sub": "FluxAI"}])
 
+    def test_github_query_target_and_top_diff(self):
+        t = {"kind": "github", "query": "comfyui music sort:stars"}
+        self.assertEqual(eh.problems({"targets": [t]}), [])
+        self.assertEqual(eh.target_id(t), "github-top/comfyui-music")
+        self.assertTrue(eh.target_url(t).endswith("&q=comfyui%20music"))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._unit(root, "mw", [t, {"kind": "reddit", "sub": "comfyui"}])
+            runs = [[{"repo": "a/x", "stars": 9}, {"repo": "b/y", "stars": 5}],
+                    [{"repo": "a/x", "stars": 10}, {"repo": "c/z", "stars": 6}]]
+            calls = []
+            fake = lambda q, n: (calls.append(q), runs[len(calls) - 1])[1]
+            ns = argparse.Namespace(roots=[str(root)], unit=None, n=10, json=True, no_save=False,
+                                    state=str(root / "top.json"))
+            for want in ([False, False], [False, True]):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    self.assertEqual(eh.cmd_top(ns, fetch=fake), 0)
+                self.assertEqual([c["new"] for c in json.loads(buf.getvalue())[0]["top"]], want)
+            self.assertEqual(calls, ["comfyui music sort:stars"] * 2)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
