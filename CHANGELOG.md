@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261120-1 · 2026-11-20 · Version 1.1.5: `tested --target` regression and tie gate
+because: technique harvest, arXiv:2610.35434 (Skill^infty, https://arxiv.org/abs/2610.35434), verdict adopt-partly: its one measured lesson is a learned rule against keeping tied candidates, and tune Step 6's undo-on-regression rule was prose applied by eye.
+files: scripts/evergreen.py (holdout_ids, tested_gate, cmd_tested, `--target`), scripts/test_evergreen.py, skills/evergreen-tune/SKILL.md (Steps 5, 6), protocol/TESTING.md (§5 step 6), manifests.
+With `--target <case-id>`, `tested` compares the new failing list with the stored one and the holdout ids in evals/evals.json before overwriting it, and prints `REGRESSED: <ids>` (holdout ids tagged), `TARGET STILL FAILING: <id>` or `ACCEPT: fixed <ids>`. A reject exits 3 and leaves the state alone so tune undoes the edit; an accept keeps the previous list as `tests.prev_failing`. Without `--target` nothing changes. Tune Step 5 now asks for one line saying what result would prove the edit wrong, written before the re-run.
+verified: python scripts/test_evergreen.py (137 tests OK; test_tested_target_gates_regressions_and_ties covers accept, holdout regression, other regression, tie and no previous run)
+
 ### C-20261118-1 · 2026-11-18 · Version 1.1.4: popular-repos query targets and `harvest top`
 because: user request (2026-11-18): each plugin keeps its own popular-repos list on its topic, and each harvest should print the repos new to that list.
 files: scripts/evergreen_harvest.py (github `query` targets, `harvest top`), scripts/test_evergreen.py, protocol/PROTOCOL.md (§8 "Harvest targets"), manifests.
