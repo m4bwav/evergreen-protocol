@@ -63,7 +63,7 @@ Run by `evergreen-tune`. Bounded: three iterations per session, then stop and re
    - `wrong-outcome`: the step that produced it; add an example of the correct shape.
    - `environment`: a precondition check at the top of the skill and a learning in the profile.
    - `harness`: fix the case, not the skill.
-6. Re-run. The failing case three times, then the whole suite, held-out cases included. A held-out case that passed before the edit and fails after it means the edit fit the visible cases: undo it and try a more general one. Record with `evergreen.py tested`, write the `T-` entry, log the `C-` entry with `because: T-..., L-..., R-...`, back-fill `led to:` on the run and `applied:` on any finding.
+6. Re-run. The failing case three times, then the whole suite, held-out cases included. A held-out case that passed before the edit and fails after it means the edit fit the visible cases: undo it and try a more general one. Record with `evergreen.py tested --target <case-id>`, which rejects (exit 3) a run where a case that passed now fails or the target still fails, write the `T-` entry, log the `C-` entry with `because: T-..., L-..., R-...`, back-fill `led to:` on the run and `applied:` on any finding.
 7. Report in at most three lines: class, what changed, pass counts. Still failing after three iterations: stop, put the decision on an askwright page when askwright is installed (else ask in the report), leave `tests.failing` set, say what was tried, and say whether the tooling track found a maintained tool the skill should delegate to instead, or whether the skill should be retired.
 
 8. Stamp. Every `C-` entry ends with `verified: <suite run, T- id or evidence>`, or `verified: none` when nothing ran, so a reader knows what was checked.

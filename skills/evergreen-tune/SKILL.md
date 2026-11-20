@@ -57,15 +57,17 @@ A failure that does not reproduce in three runs is `flaky`: record the traces in
 - `environment`: a precondition check at the top of the skill (what to verify, what to tell the user when it fails) plus the profile learning from Step 3.
 - `harness`: fix the case, not the skill.
 
-Edit in place, delta only. Never change the case being fixed in the same commit as the skill edit (only the `harness` class edits a case, and then not the skill). One class, one edit, then re-run; do not stack fixes before measuring. Never open a case marked `"holdout": true` (prompt, graders or fixture) before the edit is made: an edit chosen while reading every case can fit those cases and nothing else.
+Edit in place, delta only. Never change the case being fixed in the same commit as the skill edit (only the `harness` class edits a case, and then not the skill). One class, one edit, then re-run; do not stack fixes before measuring. Before the re-run, write one line in the learning: what result would prove this edit wrong. Never open a case marked `"holdout": true` (prompt, graders or fixture) before the edit is made: an edit chosen while reading every case can fit those cases and nothing else.
 
 ## Step 6: re-run and record
 
-The failing case three times, then the whole suite (`evergreen-test` Step 3), held-out cases included. A held-out case that passed before the edit and fails after it means the edit fit the cases you read: undo it and try a more general one. Then:
+The failing case three times, then the whole suite (`evergreen-test` Step 3), held-out cases included. Record it through the gate, naming the case the edit set out to fix:
 
 ```
-EG tested <unit> --passed N --failed M [--failing ids] --harness <name> --note "<class: what changed>"
+EG tested <unit> --passed N --failed M [--failing ids] --target <case-id> --harness <name> --note "<class: what changed>"
 ```
+
+The gate compares the new failing list with the previous run's and with the holdout ids in evals/evals.json. `REGRESSED: <ids>` (holdout cases tagged `(holdout)`) means the edit broke a case that passed, or fit the cases you read; `TARGET STILL FAILING` means the edit tied and fixed nothing. Either one exits 3 and leaves the state alone: undo the edit and try a more general one. `ACCEPT: fixed <ids>` records the run (the previous list kept as `tests.prev_failing`). Without `--target`, `tested` records the run with no gate.
 
 Write the `T-` entry in TESTS.md with `led to: L-..., C-..., R-...`; log the `C-` entry in CHANGELOG.md with `because: T-..., L-...` (and `R-...` when Step 4 ran); back-fill `applied:` on any finding. When the run is clean, `failing` is cleared by `tested`; `EG flag <unit> --clear-failing <id>` clears one by hand.
 

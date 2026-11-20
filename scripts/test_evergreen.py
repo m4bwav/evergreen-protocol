@@ -1018,6 +1018,47 @@ class Scaffold(unittest.TestCase):
         self.assertNotIn("Reference answer", j1)
         self.assertIn("Reference answer (a correct reply says this; its wording may differ):\n533, as part of", j2)
 
+    def test_tested_target_gates_regressions_and_ties(self):
+        """arXiv:2610.35434: a tune edit is kept only when it fixes its target and breaks nothing, holdout included."""
+        d = Path(self.tmp.name) / "gate"
+        eg.main(["init", str(d), "--name", "gate", "--topic", "t", "--tier", "moderate", "--standalone", "--last-checked", "2026-09-01"])
+        (d / "evals").mkdir(exist_ok=True)
+        (d / "evals" / "evals.json").write_text(json.dumps({"evals": [{"id": f"c{i}", "kind": "action", "prompt": "p"} for i in range(1, 5)]
+                                                          + [{"id": "c5", "kind": "outcome", "prompt": "p", "holdout": True}]}), encoding="utf-8")
+
+        def gated(failing):
+            argv = ["tested", str(d), "--passed", str(5 - len(failing)), "--failed", str(len(failing)), "--failing", ",".join(failing),
+                    "--target", "c3", "--no-notify"]
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                try:
+                    eg.main(argv)
+                    code = 0
+                except SystemExit as e:
+                    code = e.code
+            return code, buf.getvalue()
+
+        # no previous run: nothing to compare, the target passes, accepted
+        code, out = gated([])
+        self.assertEqual((code, "ACCEPT: no previous run" in out), (0, True))
+        capture(["tested", str(d), "--passed", "4", "--failed", "1", "--failing", "c3", "--no-notify"])   # baseline: c3 fails
+        before = eg.load_state(d)[1]["tests"]
+        for failing, code_want, line in ((["c5"], 3, "REGRESSED: c5 (holdout)"), (["c1"], 3, "REGRESSED: c1"),
+                                         (["c3"], 3, "TARGET STILL FAILING: c3")):
+            code, out = gated(failing)
+            self.assertEqual(code, code_want, out)
+            self.assertIn(line, out)
+            self.assertEqual(eg.load_state(d)[1]["tests"], before)   # a rejected run leaves the state alone
+        code, out = gated([])
+        self.assertEqual(code, 0, out)
+        self.assertIn("ACCEPT: fixed c3", out)
+        t = eg.load_state(d)[1]["tests"]
+        self.assertEqual((t["failing"], t["prev_failing"]), ([], ["c3"]))
+        # without --target the old behaviour stands: a regression is recorded, no gate, exit 0
+        out = capture(["tested", str(d), "--passed", "4", "--failed", "1", "--failing", "c5", "--no-notify"])
+        self.assertNotIn("REGRESSED", out)
+        self.assertEqual(eg.load_state(d)[1]["tests"]["failing"], ["c5"])
+
     def test_holdout_is_asked_for_once_a_suite_can_spare_one(self):
         p = Path(self.tmp.name) / "evals.json"
         base = [{"id": "decoy-1", "kind": "trigger", "decoy": True, "prompt": "p"}]

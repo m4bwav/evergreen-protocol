@@ -22,7 +22,7 @@ Commands
                 [--main SKILL.md] [--standalone] [--append-maintenance]
                 [--source PATH] [--last-checked DATE]   scaffold + state
   test-init <unit>                  add TESTS.md, evals/evals.json and the tests block to an existing skill or plugin
-  tested  <unit> --passed N --failed N [--failing id,id] [--harness H] [--env E] [--note ..]
+  tested  <unit> --passed N --failed N [--failing id,id] [--harness H] [--env E] [--note ..] [--target id]  (gate: exit 3 on regression or tie)
                                     record a suite run; prints the next T- id for TESTS.md
   failed  <unit> --case ID --class CLASS [--note ..]   record a failure seen in use; says whether research is due first
   eval-export <unit> [--out DIR] [--force]   write `claude plugin eval` case folders from evals/evals.json
@@ -2152,6 +2152,33 @@ def cmd_test_init(a):
         print("  - " + n)
 
 
+def holdout_ids(d: Path) -> set[str]:
+    """Ids of the cases marked "holdout": true in the unit's evals/evals.json (empty when there is none)."""
+    try:
+        data = json.loads((d / "evals" / "evals.json").read_text(encoding="utf-8"))
+    except Exception:
+        return set()
+    cases = data.get("evals") if isinstance(data, dict) else data
+    return {str(c.get("id")) for c in (cases or []) if isinstance(c, dict) and c.get("holdout") is True and c.get("id")}
+
+
+def tested_gate(prev, now, holdout, target):
+    """Regression and tie gate for a tune edit (arXiv:2610.35434: reject ties, keep only edits that fix the target
+    without breaking anything). prev is the failing list of the previous run, or None when there was none.
+    Returns (verdict, lines): verdict is ACCEPT, REGRESSED or TARGET STILL FAILING."""
+    now_set = set(now)
+    newly = sorted(now_set - set(prev or []))
+    fixed = sorted(set(prev or []) - now_set)
+    if prev is not None and newly:
+        tagged = [f"{i} (holdout)" if i in holdout else i for i in newly]
+        return "REGRESSED", [f"REGRESSED: {', '.join(tagged)}"]
+    if target in now_set:
+        return "TARGET STILL FAILING", [f"TARGET STILL FAILING: {target}"]
+    if prev is None:
+        return "ACCEPT", [f"ACCEPT: no previous run to compare; target {target} passes"]
+    return "ACCEPT", [f"ACCEPT: fixed {', '.join(fixed) or 'none'}"]
+
+
 def cmd_tested(a):
     d, st = load_state(a.unit)
     if not tests_apply(st):
@@ -2161,6 +2188,15 @@ def cmd_tested(a):
     now = datetime.now()
     passed, failed = int(a.passed or 0), int(a.failed or 0)
     failing = [x.strip() for x in (a.failing or "").split(",") if x.strip()] if failed else []
+    if getattr(a, "target", None):
+        prev = list(t.get("failing") or []) if t.get("last_run") else None
+        verdict, lines = tested_gate(prev, failing, holdout_ids(d), a.target)
+        for line in lines:
+            print(line)
+        if verdict != "ACCEPT":
+            print(f"{st['name']}: edit rejected, state unchanged; undo the edit and try a more general one (exit 3)")
+            sys.exit(3)
+        t["prev_failing"] = prev or []
     t.update({"last_run": fmt_when(now, True), "harness": a.harness or t.get("harness"), "env": a.env or neutral_env(),
               "cases": passed + failed, "passed": passed, "failed": failed, "failing": failing})
     if failed:
@@ -2437,7 +2473,10 @@ def main(argv=None):
     s = sp.add_parser("test-init", parents=[common], help="add TESTS.md, evals/evals.json and the tests block to an existing skill or plugin"); s.add_argument("unit"); s.set_defaults(fn=cmd_test_init)
     s = sp.add_parser("tested", parents=[common], help="record a suite run"); s.add_argument("unit"); s.add_argument("--passed", type=int, default=0); s.add_argument("--failed", type=int, default=0)
     s.add_argument("--failing", help="comma-separated ids of the failing cases"); s.add_argument("--harness"); s.add_argument("--env", help="default: EVERGREEN_ENV, else the config's env_name, else the OS family (never the hostname)")
-    s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards"); s.set_defaults(fn=cmd_tested)
+    s.add_argument("--note"); s.add_argument("--no-notify", action="store_true", help="do not publish (git push / PR, or the update email) afterwards")
+    s.add_argument("--target", help="the case a tune edit set out to fix: gate the run against the previous failing list "
+                   "and the holdout cases; prints REGRESSED, TARGET STILL FAILING or ACCEPT, exit 3 and state unchanged on reject")
+    s.set_defaults(fn=cmd_tested)
     s = sp.add_parser("judge-sample", parents=[common], help="a random sample of llm grader verdicts to label by hand, the verdicts in a key file beside it")
     s.add_argument("results", nargs="+", help="aggregate-result.json files or folders holding them"); s.add_argument("--out", required=True)
     s.add_argument("--n", type=int, default=LABELS_MIN); s.add_argument("--seed", type=int); s.set_defaults(fn=cmd_judge_sample)
