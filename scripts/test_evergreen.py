@@ -1670,6 +1670,35 @@ class Worth(unittest.TestCase):
             ab = ew.ab_report(self.t / label, [str(res)])
             self.assertEqual(ew.verdict(lean, ab)[0], want, f"{label}: {ab}")
 
+    def test_verdict_stable_and_in_sample_warning(self):
+        lean = {"static": "LEAN"}
+        res = self.t / "st" / "r1"
+        result_file(res, [1, 1, 1, 1, 1, 1], [0, 0, 1, 0, 0, 0], 0.12, 0.1)
+        sb = ew.verdict_stable(lean, ew.ab_report(self.t / "st", [str(res)]), more=1)
+        self.assertTrue(sb["stable"], sb)  # one more run each way cannot undo a 5-of-6 gain
+        self.assertIsNone(ew.verdict_stable(lean, ew.ab_report(self.t / "st", [str(res)])))  # already at 5 runs
+        res = self.t / "ns" / "r1"
+        result_file(res, [1, 1, 0], [1, 0, 0], 0.1, 0.1)
+        sb = ew.verdict_stable(lean, ew.ab_report(self.t / "ns", [str(res)]))
+        self.assertFalse(sb["stable"])
+        self.assertEqual(sb["more"], 2)
+        u = self.skill("ins", SPECIFIC_SKILL)
+        (u / "evals").mkdir()
+        (u / "evals" / "evals.json").write_text("{}", encoding="utf-8")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+        def commit(path, when):
+            e = {**env, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+            subprocess.run(["git", "add", path], cwd=u, check=True, env=e, capture_output=True)
+            subprocess.run(["git", "commit", "-qm", path], cwd=u, check=True, env=e, capture_output=True)
+        subprocess.run(["git", "init", "-q"], cwd=u, check=True, capture_output=True)
+        commit("evals/evals.json", "2026-01-01T00:00:00Z")
+        commit("SKILL.md", "2026-01-02T00:00:00Z")
+        self.assertTrue(ew.edited_after_cases(u / "SKILL.md", u / "evals" / "evals.json"))
+        (u / "evals" / "evals.json").write_text('{"evals": []}', encoding="utf-8")
+        commit("evals/evals.json", "2026-01-03T00:00:00Z")
+        self.assertFalse(ew.edited_after_cases(u / "SKILL.md", u / "evals" / "evals.json"))
+
     def test_ab_counts_only_value_cases_and_the_latest_run(self):
         u = self.skill("u", SPECIFIC_SKILL)
         (u / "evals").mkdir()
