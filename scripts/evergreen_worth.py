@@ -909,6 +909,39 @@ def verdict(static: dict, ab: dict | None) -> tuple[str, str]:
     return "UNPROVEN", "nothing suspect on reading; only the A/B shows whether it helps"
 
 
+def verdict_stable(static: dict, ab: dict, more: int | None = None) -> dict | None:
+    """Could `more` further runs per arm per case move the verdict? Tries the two extremes (every new run passes with
+    and fails without, and the reverse) at the current cost ratio. Hubbard's value of information: stop measuring
+    when no outcome can flip the decision."""
+    cases = max(1, len(ab["cases"]))
+    if more is None:
+        more = HEAVY_RUNS - min(ab["runs_with"], ab["runs_without"]) // cases
+    if more <= 0:
+        return None
+    k = more * cases
+    now = verdict(static, ab)[0]
+    seen = set()
+    for add_w, add_o in ((k, 0), (0, k)):
+        nw, no = ab["runs_with"] + k, ab["runs_without"] + k
+        a = (ab["pass_with"] * ab["runs_with"] + add_w) / nw
+        b = (ab["pass_without"] * ab["runs_without"] + add_o) / no
+        se = math.sqrt(a * (1 - a) / nw + b * (1 - b) / no)
+        alt = {**ab, "runs_with": nw, "runs_without": no, "pass_with": a, "pass_without": b, "delta": a - b,
+               "margin": max(2 * se, 1.0 / min(nw, no))}
+        seen.add(verdict(static, alt)[0])
+    seen.discard(now)
+    return {"more": more, "stable": not seen, "could_be": sorted(seen)}
+
+
+def edited_after_cases(skill_md: Path, evals_json: Path) -> bool:
+    """True when SKILL.md was last committed after the evals.json its value cases live in (False outside git)."""
+    def stamp(p: Path) -> int | None:
+        out = eg.git(["log", "-1", "--format=%ct", "--", p.name], p.parent)
+        return int(out.strip()) if out and out.strip().isdigit() else None
+    s, e = stamp(skill_md), stamp(evals_json)
+    return s is not None and e is not None and s > e
+
+
 # ---------- targets, output, recording ----------
 
 def find_skill_files(target: Path) -> list[Path]:
@@ -956,6 +989,11 @@ def assess(target: Path, against: str | None = None, results: list[str] | None =
             ev = evidence_report(evals_home, skill=None if own_home else st["skill"])
             st["lint"] = case_lint(evals_home, skill=None if own_home else st["skill"])
         v, why = verdict(st, ab)
+        if ab:
+            st["stable"] = verdict_stable(st, ab)
+        if ev and ev["value_cases"] and edited_after_cases(f, evals_home / "evals" / "evals.json"):
+            st["warnings"].append("cases predate edit: verdict in-sample; write one case after the edit (or a holdout) "
+                                  "before KEEP")
         if ab and ev and ev["process_only"] and ab["delta"] >= ab["margin"]:
             gain = [c["case"] for c in ab["cases"] if c["delta"] > 0]
             if gain and set(gain) <= set(ev["process_only"]):
@@ -1027,6 +1065,11 @@ def render(r: dict) -> str:
         L.append(f"  probe    without the skill the answer named {p['covered']} of {p['anchors']} key anchors "
                  f"({int(100 * (p['coverage'] or 0))}%); answer in {p['out']}")
     L.append(f"  verdict  {r['verdict']}  {r['why']}")
+    sb = r.get("stable")
+    if sb:
+        L.append(f"  stable   " + (f"yes: no outcome of {sb['more']} more run(s) per arm per case moves the verdict; stop"
+                                    if sb["stable"] else
+                                    f"no: {sb['more']} more run(s) per arm per case could make it {', '.join(sb['could_be'])}"))
     for m in r.get("modes") or []:
         L.append(f"  mode {m['mode']}   {m['name']}: {m['evidence']}")
     for g in r.get("gaps") or []:
@@ -1318,6 +1361,10 @@ def _heavy_topup(a, skill_md: Path, target: Path, out: Path, variables: dict, ea
         spent, n = _spent(out)
         spent += probe_cost
         if ab is None or abs(ab["delta"]) >= ab["margin"] or (ab["pass_with"] == 0 and ab["pass_without"] == 0):
+            break
+        sb = verdict_stable(static_report(skill_md, peers=False, uses=False), ab)
+        if sb and sb["stable"]:
+            print(f"[worth --heavy] verdict stable: no outcome of {sb['more']} more run(s) per arm can move it; stopping")
             break
         per_arm = min(ab["runs_with"], ab["runs_without"]) // max(1, len(ab["cases"]))
         if per_arm >= HEAVY_RUNS:

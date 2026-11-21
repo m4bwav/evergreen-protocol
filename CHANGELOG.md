@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261121-1 · 2026-11-21 · Version 1.1.6: worth stops when the verdict cannot flip; in-sample warning
+because: book distillation, Hubbard *How to Measure Anything* ch. 7 (value of information) and Silver *The Signal and the Noise* ch. 5 (overfitting); book rules, unverified by an outside check
+files: scripts/evergreen_worth.py (verdict_stable, edited_after_cases, assess, render, _heavy_topup), scripts/test_evergreen.py, skills/evergreen-worth/SKILL.md (Step 3), manifests.
+After an A/B the report prints `stable yes|no`: whether the extreme outcomes of the runs left up to 5 per arm could change the verdict; heavy mode stops top-ups when it is stable. The static read warns `cases predate edit: verdict in-sample` when SKILL.md was committed after its evals.json.
+verified: python scripts/test_evergreen.py (138 tests OK; test_verdict_stable_and_in_sample_warning: stable gain, unstable noise case, none at 5 runs, git-dated edit before and after the cases)
+
 ### C-20261120-1 · 2026-11-20 · Version 1.1.5: `tested --target` regression and tie gate
 because: technique harvest, arXiv:2610.35434 (Skill^infty, https://arxiv.org/abs/2610.35434), verdict adopt-partly: its one measured lesson is a learned rule against keeping tied candidates, and tune Step 6's undo-on-regression rule was prose applied by eye.
 files: scripts/evergreen.py (holdout_ids, tested_gate, cmd_tested, `--target`), scripts/test_evergreen.py, skills/evergreen-tune/SKILL.md (Steps 5, 6), protocol/TESTING.md (§5 step 6), manifests.
