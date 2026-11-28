@@ -1782,6 +1782,42 @@ class Worth(unittest.TestCase):
 import evergreen_ab as eab  # noqa: E402
 
 
+class Helped(unittest.TestCase):
+    """`evergreen.py helped`: the shared did-it-help step for harvest rechecks, grindwright and book harvests."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.u = Path(self.tmp.name) / "unit"
+        (self.u / "evals").mkdir(parents=True)
+        (self.u / "SKILL.md").write_text("---\nname: unit\ndescription: x\n---\n# unit\n", encoding="utf-8")
+        (self.u / "evergreen.json").write_text("{}", encoding="utf-8")
+        (self.u / "evals" / "evals.json").write_text(json.dumps({"evals": [
+            {"id": "action-snap", "kind": "action", "prompt": "snap the grid (ledger 2611.00001)"},
+            {"id": "action-other", "kind": "action", "prompt": "other"}]}), encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_ab_decides(self):
+        res = self.u / "evals" / "results"
+        result_file(res / "r1", [1, 1, 1, 1, 1], [0, 0, 0, 0, 0], name="action-snap")
+        r = ew.helped(self.u, "2611.00001")
+        self.assertEqual(r["outcome"], "helped")
+        self.assertIn("A/B on 1 case", r["evidence"][0])
+        result_file(res / "r2", [0, 0, 0, 0, 0], [1, 1, 1, 1, 1], name="action-snap", when="2026-10-30T10:00:00Z")
+        self.assertEqual(ew.helped(self.u, "action-snap")["outcome"], "hurt")
+
+    def test_learnings_vote_and_no_evidence_is_neutral(self):
+        (self.u / "LEARNINGS.md").write_text(
+            "# Learnings\n\n- L-001 `old` (2026-01-01): rule R-7 broke the build.\n"
+            "- L-002 `snap` (2026-11-20): rule R-7 caught three stray pixels on real sprites.\n", encoding="utf-8")
+        self.assertEqual(ew.helped(self.u, "R-7", since="2026-11-01")["outcome"], "helped")
+        self.assertEqual(ew.helped(self.u, "R-7")["outcome"], "hurt")
+        r = ew.helped(self.u, "R-9")
+        self.assertEqual(r["outcome"], "neutral")
+        self.assertIn("write a value case", r["evidence"][-1])
+
+
 class WorthUseful(unittest.TestCase):
     """Detecting a useless skill: transcript usage, enabled plugins, recorded baselines, process graders, failure
     modes, rulings, triage, and the headless A/B grader (TESTING.md section 8)."""

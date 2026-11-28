@@ -6,6 +6,13 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-047 · 2026-11-27 · Callers that ask "did it help" each grew their own guess; give them one entry point
+- Trigger: harvestwright's recheck, grindwright's playtest notes and the book harvests each judged an adopt by reading notes in chat, with no shared rule.
+- Hypothesis: the A/B already holds the only real proof; the rest is a vote of dated LEARNINGS entries, and no evidence must read as neutral, never as a pass.
+- Rule: callers run `evergreen.py helped <target> <technique> --since <adopt date> --json` and record its outcome and evidence; a neutral with no evidence means write a value case.
+- Evidence: C-20261127-1.
+- helpful: 0 · harmful: 0
+
 ### L-046 · 2026-11-07 · A decoy run with --skill-dir alone cannot pass when its right answer is a missing peer skill
 - Trigger: comfyui-gen decoy-1 ("90 second boss battle track") fired 3/3 in run-headless.mjs --skill-dir, before and after removing "music" from the description.
 - Hypothesis: with only the skill under test loaded, a request owned by a sibling (musicwright) has nowhere else to go.

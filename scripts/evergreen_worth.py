@@ -1423,7 +1423,79 @@ def cmd_worth_hook(a):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}}))
 
 
+# ---------- did it help: one technique or rule in one target (harvest rechecks, grindwright, book harvests) ----------
+
+HURT_WORDS = re.compile(r"\b(regress\w*|broke|broken|revert\w*|worse|hurt|harm\w*|rolled back|undid|false positive\w*)\b", re.I)
+HELP_WORDS = re.compile(r"\b(saved|fixed|faster|helped|caught|cut|fewer|prevented|works?|worked)\b", re.I)
+LEARN_ENTRY = re.compile(r"(?m)^- (L-\d+)\b[^\n]*?\((\d{4}-\d\d-\d\d)")
+
+
+def helped(target: Path, technique: str, since: str | None = None, results: list[str] | None = None) -> dict:
+    """helped, neutral or hurt for one technique (a case-id glob, a rule id or a word) in one unit, with evidence.
+
+    The A/B decides when value cases match the technique (`*technique*` in the case id, or the technique named in the
+    case text): a gain beyond the noise margin is helped, a loss beyond it hurt, else neutral. Without an A/B, the
+    unit's LEARNINGS entries dated on or after `since` that name the technique vote by their words. No evidence is
+    neutral, and says so: that is a gap to fill, not a pass."""
+    files = find_skill_files(target)
+    unit = (unit_for(files[0], target) if files else None) or (target if (target / "evergreen.json").exists() else None)
+    evidence: list[str] = []
+    if unit is None:
+        return {"target": str(target), "technique": technique, "outcome": "neutral",
+                "evidence": [f"no evergreen unit at {target}: nothing to measure"], "ab": None}
+    low = technique.lower()
+    named = [cid for cid, c in case_kinds(unit).items()
+             if low in cid.lower() or low in json.dumps(c, ensure_ascii=False).lower()]
+    globs = "|".join(named) if named else f"*{technique}*"
+    ab = ab_report(unit, results, case_glob=globs)
+    if ab:
+        evidence.append(f"A/B on {len(ab['cases'])} case(s): with {ab['pass_with']:.0%}, without {ab['pass_without']:.0%}, "
+                        f"delta {ab['delta'] * 100:+.0f} points (noise margin {ab['margin'] * 100:.0f})")
+        outcome = "helped" if ab["delta"] >= ab["margin"] else "hurt" if ab["delta"] <= -ab["margin"] else "neutral"
+        return {"target": str(target), "technique": technique, "outcome": outcome, "evidence": evidence, "ab": ab}
+    votes = {"helped": 0, "hurt": 0}
+    lp = unit / "LEARNINGS.md"
+    text = lp.read_text(encoding="utf-8", errors="replace") if lp.exists() else ""
+    for e in re.split(r"(?m)^(?=- L-\d+)", text):
+        m = LEARN_ENTRY.match(e)
+        if not m or low not in e.lower() or (since and m.group(2) < since):
+            continue
+        if HURT_WORDS.search(e):
+            votes["hurt"] += 1
+            evidence.append(f"{m.group(1)} ({m.group(2)}) reports harm: {' '.join(e.split())[:120]}")
+        elif HELP_WORDS.search(e):
+            votes["helped"] += 1
+            evidence.append(f"{m.group(1)} ({m.group(2)}) reports a gain: {' '.join(e.split())[:120]}")
+    if votes["hurt"]:
+        outcome = "hurt"
+    elif votes["helped"]:
+        outcome = "helped"
+    else:
+        outcome = "neutral"
+        evidence.append("no A/B case and no LEARNINGS entry names it" + (f" since {since}" if since else "") +
+                        ": write a value case for it (evergreen-test) to measure it")
+    return {"target": str(target), "technique": technique, "outcome": outcome, "evidence": evidence, "ab": None}
+
+
+def cmd_helped(a):
+    r = helped(Path(a.target).expanduser().resolve(), a.technique, a.since, a.results)
+    if a.json:
+        print(json.dumps(r, indent=2))
+    else:
+        print(f"{r['outcome']}: {r['technique']} in {r['target']}")
+        for e in r["evidence"]:
+            print(f"  - {e}")
+    return 0
+
+
 def add_parsers(sp, common):
+    s = sp.add_parser("helped", parents=[common], help="did one technique or rule help one target? helped, neutral or hurt with evidence")
+    s.add_argument("target", help="a skill folder, a plugin root or a unit folder")
+    s.add_argument("technique", help="a case-id glob, a rule or ledger id, or a word the cases or LEARNINGS use")
+    s.add_argument("--since", help="only LEARNINGS entries dated on or after this day (YYYY-MM-DD), e.g. the adopt date")
+    s.add_argument("--results", nargs="*", metavar="PATH", help="aggregate-result.json files or folders (default: <unit>/evals/results)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_helped)
     s = sp.add_parser("worth", parents=[common], help="is a skill worth its tokens? static signals plus the with-versus-without A/B")
     s.add_argument("target", nargs="+", help="a SKILL.md, a skill folder, a plugin root, or a folder of skill folders; "
                                              "several targets print the triage table")
