@@ -6,6 +6,13 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-049 · 2026-11-27 · Near-duplicate lessons need a number, not a judgement call
+- Trigger: wrap-ups and captures appended lessons that restated an existing entry under a new ID.
+- Hypothesis: the TF-IDF cosine the worth check uses separates restatements (0.49 to 0.68 on a real file) from new lessons (under 0.2).
+- Rule: run `evergreen.py dup` before adding a lesson; MERGE means update that entry and keep its ID. Retune DUP_MERGE (0.4) with real restatements.
+- Evidence: C-20261127-3.
+- helpful: 0 · harmful: 0
+
 ### L-048 · 2026-11-27 · Rules added from outside sources decay silently unless something lists them
 - Trigger: harvests fold rules into kb files and SKILL.md with a provenance header but no counter or review date; nothing ever asked whether they still held.
 - Hypothesis: a list for review is enough; auto-deleting on age would drop rules that are simply rarely triggered.

@@ -1488,7 +1488,40 @@ def cmd_helped(a):
     return 0
 
 
+DUP_MERGE = 0.4  # cosine at or above: update that entry instead of adding one (ACE: small IDed deltas)
+DUP_ENTRY = re.compile(r"(?m)^(?:###\s+|-\s+)(L-\d+)\b")
+
+
+def near_duplicates(learnings: Path, text: str, top: int = 3) -> tuple[str, list[tuple[float, str, str]]]:
+    """('MERGE L-NNN' or 'ADD', closest entries) for a proposed lesson against a LEARNINGS.md (### or bullet entries)."""
+    body = learnings.read_text(encoding="utf-8", errors="replace") if learnings.exists() else ""
+    entries: dict[str, str] = {}
+    for part in re.split(r"(?m)^(?=###\s+L-\d+|-\s+L-\d+)", body):
+        m = DUP_ENTRY.match(part)
+        if m:
+            entries.setdefault(m.group(1), part)
+    hits = [(round(s, 3), k, " ".join(entries[k].split())[:100]) for s, k in tfidf_cosine(text, entries)[:top] if s > 0]
+    return (f"MERGE {hits[0][1]}" if hits and hits[0][0] >= DUP_MERGE else "ADD"), hits
+
+
+def cmd_dup(a):
+    verdict_, hits = near_duplicates(Path(a.learnings).expanduser(), a.text)
+    if a.json:
+        print(json.dumps({"verdict": verdict_, "matches": [{"score": s, "id": k, "text": t} for s, k, t in hits]}, indent=2))
+        return 0
+    print(verdict_ + (": update that entry (extend Trigger, bump a counter), keep its ID" if verdict_ != "ADD" else
+                      ": no near duplicate; add a new entry"))
+    for s, k, t in hits:
+        print(f"  {s:.2f}  {k}: {t}")
+    return 0
+
+
 def add_parsers(sp, common):
+    s = sp.add_parser("dup", parents=[common], help="is a proposed lesson a near duplicate of a LEARNINGS.md entry? MERGE L-NNN or ADD")
+    s.add_argument("learnings", help="the LEARNINGS.md to check against")
+    s.add_argument("text", help="the proposed lesson (trigger plus rule)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_dup)
     s = sp.add_parser("helped", parents=[common], help="did one technique or rule help one target? helped, neutral or hurt with evidence")
     s.add_argument("target", help="a skill folder, a plugin root or a unit folder")
     s.add_argument("technique", help="a case-id glob, a rule or ledger id, or a word the cases or LEARNINGS use")
