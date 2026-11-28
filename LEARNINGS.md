@@ -6,6 +6,13 @@ Lessons about the owner's preferences or environments belong in `profile/`, not 
 
 ## Active
 
+### L-048 · 2026-11-27 · Rules added from outside sources decay silently unless something lists them
+- Trigger: harvests fold rules into kb files and SKILL.md with a provenance header but no counter or review date; nothing ever asked whether they still held.
+- Hypothesis: a list for review is enough; auto-deleting on age would drop rules that are simply rarely triggered.
+- Rule: rules outside LEARNINGS carry `last_confirmed YYYY-MM-DD` (and counters when they can); `evergreen.py stale-rules` lists the stale ones for a person; never auto-delete.
+- Evidence: C-20261127-2.
+- helpful: 0 · harmful: 0
+
 ### L-047 · 2026-11-27 · Callers that ask "did it help" each grew their own guess; give them one entry point
 - Trigger: harvestwright's recheck, grindwright's playtest notes and the book harvests each judged an adopt by reading notes in chat, with no shared rule.
 - Hypothesis: the A/B already holds the only real proof; the rest is a vote of dated LEARNINGS entries, and no evidence must read as neutral, never as a pass.

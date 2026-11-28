@@ -66,3 +66,7 @@ Every LEARNINGS.md starts with a header that links back to the main file and its
 
 Procedural lessons for [SKILL.md](SKILL.md). Research findings live in [RESEARCH.md](RESEARCH.md); every change is logged in [CHANGELOG.md](CHANGELOG.md); state in `evergreen.json`. Format and gate: MAINTENANCE.md or the plugin's protocol/LEARNINGS-FORMAT.md. Retired entries: LEARNINGS-ARCHIVE.md.
 ```
+
+## Rules outside LEARNINGS
+
+A rule folded into a kb file or a SKILL.md from an outside source (a harvest, a book) keeps its provenance header and gains `last_confirmed YYYY-MM-DD` (plus `helpful N · harmful N` where it fits) within two lines of it. `evergreen.py stale-rules <paths> --days 120` lists rules whose harmful count passed helpful, whose last_confirmed is older than the window, or whose harvest header was never confirmed. It only lists: confirming or retiring each rule is a person's call, and retiring moves the rule to an archive with the reason, as above.
