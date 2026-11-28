@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261127-1 · 2026-11-27 · Version 1.2.0: `helped`, the shared did-it-help step
+because: L-047; a harvest improvements chain (item 8) needed one call that says whether an adopted technique or rule helped a target, shared by harvest rechecks, grindwright and book harvests
+files: scripts/evergreen_worth.py (helped, cmd_helped, add_parsers), scripts/test_evergreen.py (Helped), skills/evergreen-worth/SKILL.md (Did one technique help), manifests.
+`evergreen.py helped <target> <technique> [--since DAY] [--results PATH] [--json]` returns helped, neutral or hurt with evidence. Value cases naming the technique (in the id or case text) decide through the A/B and its noise margin; without them, LEARNINGS entries dated since the adopt vote by their words (harm words win); no evidence is neutral and says to write a value case.
+verified: python scripts/test_evergreen.py (140 tests OK; test_ab_decides, test_learnings_vote_and_no_evidence_is_neutral)
+
 ### C-20261121-1 · 2026-11-21 · Version 1.1.6: worth stops when the verdict cannot flip; in-sample warning
 because: book distillation, Hubbard *How to Measure Anything* ch. 7 (value of information) and Silver *The Signal and the Noise* ch. 5 (overfitting); book rules, unverified by an outside check
 files: scripts/evergreen_worth.py (verdict_stable, edited_after_cases, assess, render, _heavy_topup), scripts/test_evergreen.py, skills/evergreen-worth/SKILL.md (Step 3), manifests.

@@ -86,6 +86,10 @@ Whatever the verdict, the skill under test gets what the run taught, as one pull
 
 Retiring, parking or removing the skill is still the user's ruling.
 
+## Did one technique help (`EG helped`)
+
+For one adopted technique or rule rather than a whole skill: `EG helped <target> <technique> --since <adopt date> --json` prints helped, neutral or hurt with evidence. Value cases naming the technique decide through the A/B; without them, dated LEARNINGS entries vote; no evidence is neutral and means write a value case. harvestwright's `hw.py recheck`, grindwright's lane reviews and the book harvests call it and record the outcome; a hurt outcome is reported, and any revert waits for the user.
+
 ## While working: capture learnings
 
 A false warning, a probe anchor list that misled, a verdict the user overruled and why, or a harness that could not run: write it to the plugin's LEARNINGS.md with Trigger and Hypothesis, so the thresholds can be tuned with evidence.
