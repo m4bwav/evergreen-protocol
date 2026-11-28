@@ -69,7 +69,7 @@ For each R, S, T or E candidate that survived, and each M candidate that names a
 
 ## Step 5: write, deltas only
 
-Write each item through its owner in Step 3, in that owner's format, as a small delta: add, update or retire one entry; never regenerate a file. Every entry carries its evidence (the command and the output that proved it, the error string, the harvest ID) and, for anything tied to an outside tool version or an open bug, what retires it. Edits to always-loaded files during an unattended run (headless, a hook, a schedule) are proposed in the report, not applied.
+Write each item through its owner in Step 3, in that owner's format, as a small delta: add, update or retire one entry; never regenerate a file. Before adding a lesson, run `EG dup <LEARNINGS.md> "<trigger and rule>"`: on `MERGE L-NNN` update that entry (extend its Trigger, bump a counter, tighten the Rule) and keep its ID; never append the same lesson twice and never rewrite a whole store (ACE's incremental delta rule). Every entry carries its evidence (the command and the output that proved it, the error string, the harvest ID) and, for anything tied to an outside tool version or an open bug, what retires it. Edits to always-loaded files during an unattended run (headless, a hook, a schedule) are proposed in the report, not applied.
 
 ## Step 6: verify
 

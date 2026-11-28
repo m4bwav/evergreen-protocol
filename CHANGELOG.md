@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261127-3 · 2026-11-27 · Version 1.4.0: `dup` finds near-duplicate lessons; wrap-up writes small IDed deltas
+because: L-049; harvest improvements chain item 10 (ACE's rule: incremental IDed additions, near duplicates merged with their IDs kept, no whole-store rewrites)
+files: scripts/evergreen_worth.py (near_duplicates, cmd_dup), scripts/test_evergreen.py (NearDuplicates), skills/evergreen-wrapup/SKILL.md (Step 5), manifests.
+`evergreen.py dup <LEARNINGS.md> "<lesson>" [--json]` scores the lesson against each entry (### and bullet forms) with the TF-IDF cosine the worth check already uses and prints `MERGE L-NNN` at 0.4 or more, else `ADD`. On a real 28-entry LEARNINGS file, restated lessons scored 0.49 to 0.68 and an unrelated one 0.12.
+verified: python scripts/test_evergreen.py (NearDuplicates)
+
 ### C-20261127-2 · 2026-11-27 · Version 1.3.0: `stale-rules` lists rules due a review, never deletes
 because: L-048; harvest improvements chain item 9 (rule decay: rules that harvests add to kb files and SKILL.md had no counters or review date)
 files: scripts/evergreen.py (stale_rules, cmd_stale_rules, parser), scripts/test_evergreen.py (StaleRules), protocol/LEARNINGS-FORMAT.md (Rules outside LEARNINGS), manifests.

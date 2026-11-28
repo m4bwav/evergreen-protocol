@@ -1782,6 +1782,19 @@ class Worth(unittest.TestCase):
 import evergreen_ab as eab  # noqa: E402
 
 
+class NearDuplicates(unittest.TestCase):
+    def test_merge_or_add(self):
+        with tempfile.TemporaryDirectory() as t:
+            f = Path(t) / "LEARNINGS.md"
+            f.write_text("# L\n\n### L-001 · 2026-01-01 · Reddit feeds answer 404 and 429 to scripts\n- Rule: read the "
+                         "Arctic Shift archive instead of Reddit feeds\n\n- L-002 `gpu` (2026-01-02): GPU agents died "
+                         "near 300k tokens of tool output.\n", encoding="utf-8")
+            v, hits = ew.near_duplicates(f, "Reddit feeds return 429 for scripts; use the Arctic Shift archive")
+            self.assertEqual(v, "MERGE L-001")
+            self.assertEqual(ew.near_duplicates(f, "GPU agents died near 300k tokens")[0], "MERGE L-002")
+            self.assertEqual(ew.near_duplicates(f, "itch.io jam pages need a browser login")[0], "ADD")
+
+
 class StaleRules(unittest.TestCase):
     def test_lists_without_editing(self):
         with tempfile.TemporaryDirectory() as t:
