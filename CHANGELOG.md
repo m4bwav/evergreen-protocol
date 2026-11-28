@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261127-4 · 2026-11-27 · Version 1.4.1: evergreen-setup screens outside skills before install
+because: L-050; harvest improvements chain item 12 (untrusted-input audit in the install path)
+files: skills/evergreen-setup/SKILL.md (Step 3), LEARNINGS.md, manifests.
+A skill, plugin or MCP server from outside is screened for prompt injection and risky commands before install (`hw.py audit` when harvestwright is installed, else a read for the listed patterns); the user sees each hit.
+verified: python scripts/test_evergreen.py
+
 ### C-20261127-3 · 2026-11-27 · Version 1.4.0: `dup` finds near-duplicate lessons; wrap-up writes small IDed deltas
 because: L-049; harvest improvements chain item 10 (ACE's rule: incremental IDed additions, near duplicates merged with their IDs kept, no whole-store rewrites)
 files: scripts/evergreen_worth.py (near_duplicates, cmd_dup), scripts/test_evergreen.py (NearDuplicates), skills/evergreen-wrapup/SKILL.md (Step 5), manifests.
