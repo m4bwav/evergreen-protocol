@@ -2332,6 +2332,54 @@ def cmd_links(a):
         sys.exit(1)
 
 
+RULE_CONFIRMED = re.compile(r"last_confirmed:?\s*(\d{4}-\d\d-\d\d)")
+RULE_COUNTS = re.compile(r"helpful:?\s*(\d+)\s*·\s*harmful:?\s*(\d+)")
+RULE_HARVEST = re.compile(r"harvestwright:\s*(\S+)\s+\S+.*?(\d{4}-\d\d-\d\d)")
+
+
+def stale_rules(paths: list[Path], days: int = 120, today: date | None = None) -> list[dict]:
+    """Rules due a human review: LEARNINGS-format entries whose harmful count passed helpful or whose
+    last_confirmed is older than `days`, and harvest provenance headers (`harvestwright: <id> <url> tier X <date>`)
+    older than `days` with no last_confirmed within two lines. Lists only; never edits or deletes a rule."""
+    cutoff = ((today or date.today()) - timedelta(days=days)).isoformat()
+    files = [f for p in paths for f in ([p] if p.is_file() else sorted(p.rglob("*.md")))]
+    out = []
+    for f in files:
+        try:
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        head = ""
+        for n, ln in enumerate(lines):
+            if ln.startswith("#"):
+                head = ln.lstrip("# ").strip()[:80]
+            near = " ".join(lines[n:n + 3])
+            c = RULE_COUNTS.search(ln)
+            if c and int(c.group(2)) > int(c.group(1)):
+                out.append({"file": str(f), "line": n + 1, "rule": head, "why": f"harmful {c.group(2)} > helpful {c.group(1)}"})
+                continue
+            m = RULE_CONFIRMED.search(ln)
+            if m and m.group(1) < cutoff:
+                out.append({"file": str(f), "line": n + 1, "rule": head, "why": f"last confirmed {m.group(1)}"})
+                continue
+            h = RULE_HARVEST.search(ln)
+            if h and h.group(2) < cutoff and not RULE_CONFIRMED.search(near):
+                out.append({"file": str(f), "line": n + 1, "rule": head or h.group(1),
+                            "why": f"harvested {h.group(2)} ({h.group(1)}), never confirmed since"})
+    return out
+
+
+def cmd_stale_rules(a):
+    rows = stale_rules([Path(p).expanduser() for p in a.paths], a.days)
+    if a.json:
+        print(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        print(f"{r['file']}:{r['line']}  {r['why']}  [{r['rule']}]")
+    print(f"{len(rows)} rule(s) to review; none were changed. Confirm (bump helpful, set last_confirmed) or retire "
+          "each with the user's yes." if rows else "no stale rules")
+
+
 def cmd_lint(a):
     d, st = load_state(a.unit)
     notes = check_links(d, st) + lint(d, st)
@@ -2496,6 +2544,9 @@ def main(argv=None):
     s = sp.add_parser("drift", parents=[common]); s.add_argument("unit"); s.add_argument("--update-sha", action="store_true"); s.set_defaults(fn=cmd_drift)
     s = sp.add_parser("links", parents=[common]); s.add_argument("unit"); s.set_defaults(fn=cmd_links)
     s = sp.add_parser("lint", parents=[common]); s.add_argument("unit"); s.set_defaults(fn=cmd_lint)
+    s = sp.add_parser("stale-rules", parents=[common], help="list rules due a review (harmful > helpful, unconfirmed for --days, old harvest headers); never edits")
+    s.add_argument("paths", nargs="+"); s.add_argument("--days", type=int, default=120); s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_stale_rules)
     s = sp.add_parser("register", parents=[common]); s.add_argument("unit"); s.set_defaults(fn=cmd_register)
     s = sp.add_parser("unregister", parents=[common]); s.add_argument("unit"); s.set_defaults(fn=cmd_unregister)
     s = sp.add_parser("bump", parents=[common]); s.add_argument("unit"); s.add_argument("--learnings", action="store_true")

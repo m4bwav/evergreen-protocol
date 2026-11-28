@@ -4,6 +4,12 @@ Every change to the plugin ([README.md](README.md), `protocol/`, `skills/`, `scr
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:`, `files:`, and what changed. Cite section headings, not line numbers.
 
+### C-20261127-2 · 2026-11-27 · Version 1.3.0: `stale-rules` lists rules due a review, never deletes
+because: L-048; harvest improvements chain item 9 (rule decay: rules that harvests add to kb files and SKILL.md had no counters or review date)
+files: scripts/evergreen.py (stale_rules, cmd_stale_rules, parser), scripts/test_evergreen.py (StaleRules), protocol/LEARNINGS-FORMAT.md (Rules outside LEARNINGS), manifests.
+`evergreen.py stale-rules <paths> [--days 120] [--json]` lists LEARNINGS-format entries whose harmful count passed helpful or whose last_confirmed is older than the window, and harvest provenance headers (`harvestwright: <id> <url> tier X <date>`) older than the window with no last_confirmed within two lines. It changes nothing; confirming or retiring a rule stays a person's call.
+verified: python scripts/test_evergreen.py (StaleRules: lists three, leaves the file byte-identical)
+
 ### C-20261127-1 · 2026-11-27 · Version 1.2.0: `helped`, the shared did-it-help step
 because: L-047; a harvest improvements chain (item 8) needed one call that says whether an adopted technique or rule helped a target, shared by harvest rechecks, grindwright and book harvests
 files: scripts/evergreen_worth.py (helped, cmd_helped, add_parsers), scripts/test_evergreen.py (Helped), skills/evergreen-worth/SKILL.md (Did one technique help), manifests.

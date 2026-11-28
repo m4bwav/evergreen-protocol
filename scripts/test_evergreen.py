@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 for _k in ("CI", "DO_NOT_TRACK", "EVERGREEN_CONTRIBUTE"):  # the suite models a person's install; a CI runner would read as "contribute no"
     os.environ.pop(_k, None)
@@ -1780,6 +1780,23 @@ class Worth(unittest.TestCase):
 
 
 import evergreen_ab as eab  # noqa: E402
+
+
+class StaleRules(unittest.TestCase):
+    def test_lists_without_editing(self):
+        with tempfile.TemporaryDirectory() as t:
+            f = Path(t) / "kb.md"
+            text = ("# kb\n\n## Old rule\n- Status: active · helpful 1 · harmful 0 · last_confirmed 2026-01-01\n"
+                    "## Bad rule\n- helpful: 0 · harmful: 2\n"
+                    "## Fresh rule\n- Status: active · helpful 2 · harmful 0 · last_confirmed 2026-11-20\n"
+                    "## Harvested\n<!-- harvestwright: 2611.1 https://x tier A 2026-05-01 -->\n"
+                    "## Harvested and confirmed\n<!-- harvestwright: 2611.2 https://y tier A 2026-05-01 -->\n"
+                    "last_confirmed 2026-11-01\n")
+            f.write_text(text, encoding="utf-8")
+            rows = eg.stale_rules([Path(t)], days=120, today=date(2026, 11, 27))
+            self.assertEqual([r["rule"] for r in rows], ["Old rule", "Bad rule", "Harvested"])
+            self.assertIn("harmful 2 > helpful 0", rows[1]["why"])
+            self.assertEqual(f.read_text(encoding="utf-8"), text)
 
 
 class Helped(unittest.TestCase):
